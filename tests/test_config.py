@@ -1,8 +1,11 @@
+import os
 import textwrap
 
 import pytest
 
 from gateway import config
+
+posix_only = pytest.mark.skipif(os.name != "posix", reason="POSIX file permissions only")
 
 
 def _write(tmp_path, body: str):
@@ -79,3 +82,23 @@ def test_rejects_overlapping_vault_paths(tmp_path):
     )
     with pytest.raises(ValueError):
         config.load_vaults(cfg)
+
+
+_TOKENS = "tokens:\n  abc123:\n    sub: alice\n    vaults: [w]\n    write: false\n"
+
+
+@posix_only
+def test_load_tokens_rejects_group_world_readable(tmp_path):
+    p = tmp_path / "tokens.yaml"
+    p.write_text(_TOKENS)
+    p.chmod(0o644)
+    with pytest.raises(PermissionError):
+        config.load_tokens(p)
+
+
+@posix_only
+def test_load_tokens_accepts_owner_only(tmp_path):
+    p = tmp_path / "tokens.yaml"
+    p.write_text(_TOKENS)
+    p.chmod(0o600)
+    assert "abc123" in config.load_tokens(p)
