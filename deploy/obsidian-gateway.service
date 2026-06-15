@@ -2,9 +2,9 @@
 # uv tool (see deploy/obsidian-gateway-update.* for daily auto-update).
 # Install:
 #   uv tool install --from git+https://github.com/fszalaj/obsidian-gateway@stable obsidian-gateway
-#   mkdir -p %h/obsidian-gateway
-#   cp vaults.example.yaml %h/obsidian-gateway/vaults.yaml          # edit: name -> path/repo_root/subdir
-#   cp tokens.example.yaml %h/obsidian-gateway/tokens.yaml && chmod 0600 %h/obsidian-gateway/tokens.yaml
+#   mkdir -p $HOME/obsidian-gateway
+#   cp vaults.example.yaml $HOME/obsidian-gateway/vaults.yaml          # edit: name -> path/repo_root/subdir
+#   cp tokens.example.yaml $HOME/obsidian-gateway/tokens.yaml && chmod 0600 $HOME/obsidian-gateway/tokens.yaml
 #   cp deploy/obsidian-gateway.service ~/.config/systemd/user/
 #   systemctl --user daemon-reload && systemctl --user enable --now obsidian-gateway
 #   loginctl enable-linger $USER   # survive logout

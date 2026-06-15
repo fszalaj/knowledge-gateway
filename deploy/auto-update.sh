@@ -7,5 +7,5 @@ remote=$(git ls-remote https://github.com/fszalaj/obsidian-gateway stable 2>/dev
 [ -z "$remote" ] && exit 0
 [ "$remote" = "$(cat "$SHA_FILE" 2>/dev/null)" ] && exit 0
 uv tool install --reinstall --from "git+https://github.com/fszalaj/obsidian-gateway@stable" obsidian-gateway || exit 1
+systemctl --user restart obsidian-gateway || exit 1
 echo "$remote" > "$SHA_FILE"
-systemctl --user restart obsidian-gateway

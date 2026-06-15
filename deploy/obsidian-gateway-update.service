@@ -1,6 +1,6 @@
 # Daily auto-update for the gateway (pairs with obsidian-gateway-update.timer).
 # Install:
-#   cp deploy/auto-update.sh %h/obsidian-gateway/ && chmod +x %h/obsidian-gateway/auto-update.sh
+#   cp deploy/auto-update.sh $HOME/obsidian-gateway/ && chmod +x $HOME/obsidian-gateway/auto-update.sh
 #   cp deploy/obsidian-gateway-update.service deploy/obsidian-gateway-update.timer ~/.config/systemd/user/
 #   systemctl --user daemon-reload && systemctl --user enable --now obsidian-gateway-update.timer
 
