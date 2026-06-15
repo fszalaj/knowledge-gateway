@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 from pathlib import Path
 
 from fastmcp import FastMCP
@@ -57,9 +58,17 @@ def build_local_server(vault_path: str) -> FastMCP:
 def main() -> None:
     ap = argparse.ArgumentParser(prog="obsidian-gateway")
     ap.add_argument("--vault", help="serve THIS single vault locally over stdio (no auth)")
+    ap.add_argument("--local", action="store_true", help="auto-detect the cwd's vault and serve it locally over stdio")
     args, _ = ap.parse_known_args()
 
     vault = args.vault or os.environ.get("OBSIDIAN_GATEWAY_VAULT")
+    if not vault and (args.local or os.environ.get("OBSIDIAN_GATEWAY_LOCAL", "").strip().lower() in {"1", "true", "yes", "on"}):
+        from .detect import VaultDetectionError, detect_vault
+        try:
+            vault = str(detect_vault(Path.cwd()))
+        except VaultDetectionError as e:
+            print(f"obsidian-gateway: {e}", file=sys.stderr)
+            raise SystemExit(2)
     if vault:
         build_local_server(vault).run(transport="stdio")
         return
