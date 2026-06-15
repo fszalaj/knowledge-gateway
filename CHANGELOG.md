@@ -1,7 +1,25 @@
 # Changelog
 
-All notable changes to obsidian-gateway. Tags are immutable releases - pin a commit SHA
-(or, once published, a PyPI version) in consumers; do not rely on a moving tag.
+All notable changes to obsidian-gateway. Consumers track the moving **`stable`** branch
+(`uvx --refresh --from git+...@stable`); each release moves `stable` and auto-propagates on
+next launch (no per-repo re-pin). Every release is also an immutable `vX.Y.Z` tag for
+pinning/audit.
+
+## v0.4.0 - 2026-06-15
+
+### Security
+- Server-mode **error masking**: the HTTP server runs `mask_error_details=True`; the
+  gateway's expected client-facing failures surface as `ToolError`, while unexpected OS/git
+  errors are hidden from the client.
+
+### Features
+- **`--local` vault auto-detect**: `--local` / `OBSIDIAN_GATEWAY_LOCAL` auto-detects the
+  cwd's vault (cwd-is-vault, `./wiki`, a real `*-obsidian-vault`, a child with `.obsidian/`),
+  so one global codex/antigravity MCP config works in any repo. Explicit `--vault` still
+  wins; a bare invocation still runs the HTTP server.
+
+### Distribution
+- Introduced the moving **`stable`** branch for "update once" rollout (see the header).
 
 ## v0.3.0 - 2026-06-15
 
