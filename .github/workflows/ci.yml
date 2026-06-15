@@ -6,13 +6,30 @@ on:
   pull_request:
   push:
     branches: [main]
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-      - run: uv venv
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+      # The committed lockfile must stay consistent with pyproject.
+      - run: uv lock --check
+      # search/backlinks/list_tags shell out to ripgrep; install it so those
+      # tools and their tests actually run in CI (not silently skipped).
+      - run: sudo apt-get update && sudo apt-get install -y ripgrep
+      - run: uv venv --python ${{ matrix.python-version }}
       - run: uv pip install -e ".[dev]"
-      - run: uv run pytest -q
+      - run: uv run pytest -q --cov=gateway --cov-report=term-missing

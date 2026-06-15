@@ -66,5 +66,14 @@ def load_tokens(path: Path | None = None) -> dict:
         raise FileNotFoundError(
             f"tokens config not found: {cfg} — copy tokens.example.yaml to tokens.yaml"
         )
+    # Secrets file: refuse to load if it is group/world-accessible. The docs tell
+    # admins to `chmod 0600`, but nothing enforced it — a 0644 tokens.yaml would
+    # silently expose every bearer token to other local users.
+    if os.name == "posix":
+        mode = cfg.stat().st_mode & 0o777
+        if mode & 0o077:
+            raise PermissionError(
+                f"{cfg} is group/world-accessible (mode {mode:#o}); run: chmod 0600 {cfg}"
+            )
     data = yaml.safe_load(cfg.read_text()) or {}
     return data.get("tokens") or {}

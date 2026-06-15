@@ -142,13 +142,21 @@ claude mcp add --transport http --scope project teamwiki \
 ## Security model
 
 - **No secrets in the repo.** `vaults.yaml` and `tokens.yaml` are gitignored;
-  only `*.example.yaml` (placeholders) ship. The code contains no credentials.
+  only `*.example.yaml` (placeholders) ship. The code contains no credentials, and
+  `tokens.yaml` is refused at load time if it is group/world-readable.
 - **Local mode has no secret surface** - it is a local stdio subprocess; the
-  trust boundary is filesystem access the user already has.
-- **Server mode: three independent layers** - tailnet ACL (network) + HTTPS
-  (transport) + per-user bearer/ACL (application).
-- **Path guards everywhere** - traversal, symlink-escape, hidden files, non-`.md`
-  and `.git`/`.obsidian`/`.env` are rejected on every read/write/delete.
+  trust boundary is filesystem access the user already has. (First launch still
+  fetches and runs the gateway from its pinned ref - pin a commit SHA, not a tag.)
+- **Server mode: defense in depth, not a hardened public endpoint** - tailnet ACL
+  (network) + HTTPS (transport) + a per-user **static bearer token** (FastMCP
+  `StaticTokenVerifier`). That bearer layer is a shared secret suitable **only
+  behind a trusted tailnet**, not a standalone authentication control - do not
+  expose the server publicly.
+- **Path guards on note I/O** - `read_note` / `write_note` / `patch_*` /
+  `delete_note` / `rename_note` go through `safe_note_path`, which rejects
+  traversal, symlink escape, hidden/dotfiles (incl. `.env`), non-`.md`, and
+  `.git`/`.obsidian`. `search` / `backlinks` / `list_tags` are bounded to `*.md`
+  and exclude system dirs via ripgrep globs.
 - **Commits are attributed** to the requesting user (server) or the local git
   identity (local), and pathspec-scoped to the vault subdir.
 

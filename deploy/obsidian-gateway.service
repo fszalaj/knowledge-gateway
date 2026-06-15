@@ -19,5 +19,39 @@ ExecStart=%h/.local/bin/uv run --project %h/obsidian-gateway obsidian-gateway
 Restart=on-failure
 RestartSec=3
 
+# --- Sandboxing (least privilege at the OS layer) ---
+# Seccomp / capability / rlimit based - safe for a `systemctl --user` unit (no
+# mount-namespace dependency):
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+ProtectClock=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+#
+# Namespace / mount based isolation - ENABLE after verifying your host allows
+# unprivileged user namespaces (most do; some hardened or older hosts do not, where
+# these make a --user unit fail to start). ProtectControlGroups is NOT supported by
+# the per-user manager, so it is intentionally omitted.
+# PrivateTmp=yes
+# PrivateDevices=yes
+# ProtectKernelTunables=yes
+# ProtectKernelModules=yes
+# ProtectKernelLogs=yes
+# ProtectHostname=yes
+#
+# Filesystem lockdown - with ProtectSystem=strict the whole FS is read-only except
+# ReadWritePaths, so list every vault repo plus uv's cache or the service cannot
+# write/commit. Do NOT use ProtectHome= (vaults live under $HOME); do NOT set
+# User=/DynamicUser= (already a --user unit).
+# ProtectSystem=strict
+# ReadWritePaths=%h/obsidian-gateway %h/.cache/uv %h/.local/share/uv  # + each vault repo path
+
 [Install]
 WantedBy=default.target
