@@ -26,9 +26,10 @@ def _is_vault(d: Path) -> bool:
 
 
 def detect_vault(cwd: Path) -> Path:
-    """Find the vault to serve when --vault is omitted. Precedence: ./wiki (a real vault),
-    a single ./*-obsidian-vault, cwd or a single child with .obsidian/, then cwd if it has
-    top-level *.md. Same-tier multiplicity, or nothing, raises VaultDetectionError."""
+    """Find the vault to serve when --vault is omitted. Precedence: cwd if it is itself a
+    vault (.obsidian/), then ./wiki (a real vault), a single real ./*-obsidian-vault, a
+    single child dir with .obsidian/. Same-tier multiplicity, or nothing, raises
+    VaultDetectionError (pass --vault)."""
     cwd = cwd.resolve()
     if (cwd / ".obsidian").is_dir():  # cwd itself is a vault (wins over a wiki/ subfolder)
         return cwd
