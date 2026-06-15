@@ -10,6 +10,8 @@ from .search import ripgrep
 from .vaults import Vault
 from .writes import atomic_write
 
+MAX_NOTE_BYTES = 10 * 1024 * 1024  # read_note guard against a pathological huge file
+
 
 def _scopes() -> list[str]:
     tok = get_access_token()
@@ -74,6 +76,8 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
         target = v.safe_note_path(path)
         if not target.is_file():
             raise FileNotFoundError(f"not_found: {path}")
+        if target.stat().st_size > MAX_NOTE_BYTES:
+            raise ValueError(f"too_large: {path} is over {MAX_NOTE_BYTES // (1024 * 1024)} MiB")
         return target.read_text(encoding="utf-8")
 
     @mcp.tool
@@ -263,6 +267,8 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
             if type is not None and data.get("type") != type:
                 continue
             tags = data.get("tags") or []
+            if isinstance(tags, str):  # frontmatter `tags: backend` (a scalar) -> [backend]
+                tags = [tags]
             if tag is not None and tag not in tags:
                 continue
             out.append({"path": rel, "type": data.get("type"), "tags": tags})

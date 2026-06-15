@@ -12,9 +12,11 @@ def _stem(note: str) -> str:
 
 
 def backlinks(root: Path, note: str, *, limit: int = 200) -> list[dict]:
-    """Notes that link to `note` via [[wikilink]], [[note|alias]], [[note#h]] or ![[note]]."""
+    """Notes that link to `note` via [[wikilink]], [[note|alias]], [[note#h]], [[note^b]]
+    or ![[note]]. Matches the flat name case-insensitively (Obsidian resolves links that
+    way) with or without a trailing .md."""
     stem = re.escape(_stem(note))
-    pattern = rf"\[\[{stem}(\]|\||#)"
-    hits = ripgrep(root, pattern, regex=True, limit=limit)
-    target = _stem(note)
-    return [h for h in hits if _stem(h["file"]) != target]
+    pattern = rf"\[\[{stem}(\.md)?(\]|\||#|\^)"
+    hits = ripgrep(root, pattern, regex=True, limit=limit, ignore_case=True)
+    target = _stem(note).lower()
+    return [h for h in hits if _stem(h["file"]).lower() != target]

@@ -20,9 +20,12 @@ def ripgrep(
     limit: int = 50,
     context: int = 0,
     timeout: int = 20,
+    ignore_case: bool = False,
 ) -> list[dict]:
     limit = max(1, min(limit, 1000))
-    cmd = ["rg", "--json", "-S"]
+    # -i forces case-insensitive (used for wikilink/tag matching, which Obsidian
+    # treats case-insensitively); -S (smart case) stays the default for free-text search.
+    cmd = ["rg", "--json", "-i" if ignore_case else "-S"]
     if not regex:
         cmd.append("--fixed-strings")
     if context:

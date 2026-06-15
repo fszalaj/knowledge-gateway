@@ -117,17 +117,17 @@ def insert_markdown(
 
 
 def rewrite_wikilinks(text: str, old_stem: str, new_stem: str) -> tuple[str, int]:
-    """Rewrite `[[old]]`, `[[old|alias]]`, `[[old#heading]]`, `[[old^block]]` and
-    `![[old]]` to use new_stem, preserving alias/heading/block and the embed `!`.
-    Matches the flat note name only - `[[oldfoo]]` is left alone. Returns
-    (new_text, links_rewritten)."""
-    pat = re.compile(r"(!?\[\[)" + re.escape(old_stem) + r"(?=[\]|#^])")
+    """Rewrite `[[old]]`, `[[old|alias]]`, `[[old#heading]]`, `[[old^block]]`, `[[old.md]]`
+    and `![[old]]` to use new_stem, preserving alias/heading/block, the optional .md and
+    the embed `!`. Matches the flat note name case-insensitively (Obsidian resolves links
+    that way); `[[oldfoo]]` is left alone. Returns (new_text, links_rewritten)."""
+    pat = re.compile(r"(!?\[\[)" + re.escape(old_stem) + r"(\.md)?(?=[\]|#^])", re.IGNORECASE)
     count = 0
 
     def repl(m: "re.Match[str]") -> str:
         nonlocal count
         count += 1
-        return m.group(1) + new_stem
+        return m.group(1) + new_stem + (m.group(2) or "")
 
     return pat.sub(repl, text), count
 

@@ -115,3 +115,12 @@ def test_closing_fence_must_be_own_line():
     out = edits.update_frontmatter(note, {"x": 1})
     assert dict(edits.read_frontmatter(out)) == {"title": "abc---", "status": "old", "x": 1}
     assert out.endswith("body\n")
+
+
+def test_rewrite_wikilinks_md_caseinsensitive_and_boundaries():
+    t = "[[Beta]] [[beta]] [[Beta.md]] [[BETA#h]] [[Beta^b]] ![[beta]] [[Betafoo]] [[A Beta]]"
+    out, n = edits.rewrite_wikilinks(t, "Beta", "Gamma")
+    assert n == 6  # Beta, beta, Beta.md, BETA#h, Beta^b, ![[beta]]
+    for s in ("[[Gamma]]", "[[Gamma.md]]", "[[Gamma#h]]", "[[Gamma^b]]", "![[Gamma]]"):
+        assert s in out, (s, out)
+    assert "[[Betafoo]]" in out and "[[A Beta]]" in out  # boundaries: left untouched
