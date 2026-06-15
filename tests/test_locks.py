@@ -53,3 +53,32 @@ def test_commit_paths_scoping(tmp_path):
     ).stdout
     assert "wiki/a.md" in tracked
     assert "wiki/b.md" not in tracked  # left pending, not swept into this commit
+
+
+def _repo(tmp_path):
+    _git(tmp_path, "init")
+    _git(tmp_path, "config", "user.email", "t@t")
+    _git(tmp_path, "config", "user.name", "t")
+    wiki = tmp_path / "wiki"
+    wiki.mkdir()
+    return Vault(name="w", path=wiki, repo_root=tmp_path, subdir="wiki")
+
+
+def test_commit_skips_untracked_missing_path(tmp_path):
+    # deleting/renaming an untracked note: the missing pathspec is filtered, not a crash
+    v = _repo(tmp_path)
+    res = gitops.commit(v, "x", paths=["wiki/ghost.md"])
+    assert res["committed"] is False
+
+
+def test_commit_stages_tracked_deletion(tmp_path):
+    v = _repo(tmp_path)
+    (v.path / "a.md").write_text("a")
+    gitops.commit(v, "add a", paths=["wiki/a.md"])
+    (v.path / "a.md").unlink()  # delete a tracked file
+    res = gitops.commit(v, "del a", paths=["wiki/a.md"])
+    assert res["committed"] is True
+    tracked = subprocess.run(
+        ["git", "-C", str(tmp_path), "ls-files"], capture_output=True, text=True
+    ).stdout
+    assert "wiki/a.md" not in tracked  # deletion committed
