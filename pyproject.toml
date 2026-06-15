@@ -1,0 +1,30 @@
+[project]
+name = "obsidian-gateway"
+version = "0.2.0"
+description = "Filesystem/git-native FastMCP gateway serving Obsidian vaults over MCP"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Filip Szalaj" }]
+requires-python = ">=3.11"
+dependencies = [
+    "fastmcp>=3.0",
+    "pyyaml>=6.0",
+    "ruamel.yaml>=0.18",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+obsidian-gateway = "gateway.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["gateway"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

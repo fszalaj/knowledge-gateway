@@ -1,0 +1,27 @@
+# Bearer tokens for SHARED SERVER mode. Copy to tokens.yaml (gitignored),
+# then: chmod 0600 tokens.yaml
+# Generate each token value with:  openssl rand -hex 32   (run once per user)
+#
+# Each token maps to:
+#   sub:    identity recorded with writes (audit)
+#   vaults: the ONLY vaults this token may see or touch
+#   write:  false = read-only
+#
+# A token cannot see, enumerate, or reach any vault not in its `vaults` list -
+# list_vaults hides them and every other call returns an opaque vault_forbidden.
+
+tokens:
+  "REPLACE_WITH_openssl_rand_hex_32__alice":
+    sub: alice
+    vaults: [teamwiki]
+    write: true
+
+  "REPLACE_WITH_openssl_rand_hex_32__bob":
+    sub: bob
+    vaults: [teamwiki]
+    write: true
+
+  "REPLACE_WITH_openssl_rand_hex_32__ci":
+    sub: ci-readonly
+    vaults: [teamwiki]
+    write: false

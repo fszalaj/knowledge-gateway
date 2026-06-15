@@ -1,0 +1,23 @@
+# systemd unit for the shared-server deploy.
+# Install:  cp deploy/obsidian-gateway.service ~/.config/systemd/user/
+#           systemctl --user daemon-reload && systemctl --user enable --now obsidian-gateway
+#           loginctl enable-linger $USER   # survive logout
+#
+# The gateway binds loopback only; Tailscale Serve is the network front door.
+
+[Unit]
+Description=Obsidian MCP gateway (filesystem/git-native)
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/obsidian-gateway
+Environment=OBSIDIAN_GATEWAY_HOST=127.0.0.1
+Environment=OBSIDIAN_GATEWAY_PORT=8765
+Environment=OBSIDIAN_GATEWAY_PATH=/mcp/
+ExecStart=%h/.local/bin/uv run --project %h/obsidian-gateway obsidian-gateway
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

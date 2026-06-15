@@ -1,0 +1,23 @@
+# Vault registry for SHARED SERVER mode. Copy to vaults.yaml (gitignored).
+# (Local mode does not use this file - it takes a single --vault path.)
+#
+#   path:      directory holding the markdown (the Obsidian vault root)
+#   repo_root: git repo root - equals `path` when the vault IS its own repo,
+#              or a PARENT when the vault is a subdirectory of a larger repo
+#   subdir:    vault path relative to repo_root ("." when vault == repo root).
+#              Commits are scoped to this subdir, so sibling code is never touched.
+
+vaults:
+  # A vault that is a subdirectory of a larger code repo:
+  teamwiki:
+    path: ~/srv/teamwiki/wiki
+    repo_root: ~/srv/teamwiki
+    subdir: wiki
+    description: "Team knowledge base"
+
+  # A vault that is its own standalone repo:
+  # notes:
+  #   path: ~/vaults/notes
+  #   repo_root: ~/vaults/notes
+  #   subdir: "."
+  #   description: "Personal notes"
