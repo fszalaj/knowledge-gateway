@@ -2,16 +2,18 @@ from __future__ import annotations
 
 import functools
 import inspect
+import json
 import os
 
 from fastmcp.exceptions import ToolError
 from fastmcp.server.dependencies import get_access_token
+from fastmcp.utilities.types import File, Image
 
 from . import acl, edits, gitops, links
 from . import tags as tagmod
 from .locks import write_lock
 from .search import ripgrep
-from .vaults import Vault
+from .vaults import IMAGE_FORMATS, MAX_ATTACHMENT_BYTES, Vault
 from .writes import atomic_write
 
 MAX_NOTE_BYTES = 10 * 1024 * 1024  # read_note guard against a pathological huge file
@@ -21,6 +23,7 @@ MAX_NOTE_BYTES = 10 * 1024 * 1024  # read_note guard against a pathological huge
 _EXPECTED_PREFIXES = (
     "not_found:", "exists:", "too_large:", "heading_not_found:", "bad_position:",
     "bad_message:", "path_escape:", "path_excluded:", "path_hidden:", "not_a_note:",
+    "not_an_attachment:", "not_a_canvas:", "canvas_invalid:",
     "ambiguous_old_name:", "new_name_taken:", "frontmatter_",
     "vault_forbidden:", "write_forbidden:",
 )
@@ -139,6 +142,73 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
         if target.stat().st_size > MAX_NOTE_BYTES:
             raise ValueError(f"too_large: {path} is over {MAX_NOTE_BYTES // (1024 * 1024)} MiB")
         return target.read_text(encoding="utf-8")
+
+    @tool
+    def list_attachments(vault: str, subdir: str | None = None, limit: int = 500) -> list[str]:
+        """List attachment files (images, PDF, audio, video) in a vault, vault-relative."""
+        v = _vault(vault, write=False)
+        return v.list_attachments(subdir=subdir, limit=max(1, min(limit, 5000)))
+
+    @tool
+    def read_attachment(vault: str, path: str):
+        """Read a binary attachment: an image returns as an inline Image; other types
+        (PDF, audio, video) return as a File. Refuses non-attachment paths and files
+        over the 25 MiB cap."""
+        v = _vault(vault, write=False)
+        target = v.safe_attachment_path(path)
+        if not target.is_file():
+            raise FileNotFoundError(f"not_found: {path}")
+        if target.stat().st_size > MAX_ATTACHMENT_BYTES:
+            raise ValueError(f"too_large: {path} is over {MAX_ATTACHMENT_BYTES // (1024 * 1024)} MiB")
+        data = target.read_bytes()
+        fmt = IMAGE_FORMATS.get(target.suffix.lower())
+        if fmt:
+            return Image(data=data, format=fmt)
+        return File(data=data, format=target.suffix.lower().lstrip("."), name=target.name)
+
+    @tool
+    def list_canvases(vault: str, subdir: str | None = None, limit: int = 200) -> list[str]:
+        """List Obsidian .canvas files in a vault, vault-relative."""
+        v = _vault(vault, write=False)
+        return v.list_canvases(subdir=subdir, limit=max(1, min(limit, 2000)))
+
+    @tool
+    def read_canvas(vault: str, path: str) -> dict:
+        """Read an Obsidian .canvas file as parsed JSON: nodes (type 'group' = a group),
+        edges, and 'color' fields."""
+        v = _vault(vault, write=False)
+        target = v.safe_canvas_path(path)
+        if not target.is_file():
+            raise FileNotFoundError(f"not_found: {path}")
+        if target.stat().st_size > MAX_NOTE_BYTES:
+            raise ValueError(f"too_large: {path} is over {MAX_NOTE_BYTES // (1024 * 1024)} MiB")
+        try:
+            return json.loads(target.read_text(encoding="utf-8") or "{}")
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            raise ValueError(f"canvas_invalid: {path}: {e}")
+
+    @wtool
+    def write_canvas(
+        vault: str,
+        path: str,
+        canvas: dict,
+        commit: bool = False,
+        message: str | None = None,
+    ) -> dict:
+        """Write an Obsidian .canvas file. `canvas` is the full JSON object: `nodes` (each with
+        id/type/x/y/width/height; type 'group' is a group, 'color' sets the color) and `edges`.
+        Optionally git-commit."""
+        v = _vault(vault, write=True)
+        target = v.safe_canvas_path(path)
+        if (not isinstance(canvas, dict) or not isinstance(canvas.get("nodes", []), list)
+                or not isinstance(canvas.get("edges", []), list)):
+            raise ValueError("canvas_invalid: canvas must be an object with list 'nodes' and 'edges'")
+        atomic_write(target, json.dumps(canvas, indent=2, ensure_ascii=False) + "\n")
+        result = {"vault": vault, "written": path,
+                  "nodes": len(canvas.get("nodes", [])), "edges": len(canvas.get("edges", []))}
+        if commit:
+            result["commit"] = gitops.commit(v, message or f"update canvas {path}", author=_author(), paths=[target.relative_to(v.repo_root).as_posix()])
+        return result
 
     @tool
     def search(vault: str, query: str, regex: bool = False, limit: int = 50) -> list[dict]:

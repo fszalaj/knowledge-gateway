@@ -5,6 +5,15 @@ All notable changes to obsidian-gateway. Consumers track the moving **`stable`**
 next launch (no per-repo re-pin). Every release is also an immutable `vX.Y.Z` tag for
 pinning/audit.
 
+## v0.5.0 - 2026-06-15
+
+### Features (MCP-FEAT)
+- **Attachments**: `list_attachments` + `read_attachment` - read binary vault files (images
+  return as an inline `Image`; PDF/audio/video as a `File`), path-guarded, 25 MiB cap.
+- **Obsidian Canvas**: `list_canvases` + `read_canvas` + `write_canvas` - read/write `.canvas`
+  JSON (nodes including `group` nodes, edges, `color` fields), so agents can work with groups
+  and colors.
+
 ## v0.4.2 - 2026-06-15
 
 ### Concurrency (CONC-1)

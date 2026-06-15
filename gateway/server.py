@@ -19,8 +19,10 @@ from .vaults import Vault
 INSTRUCTIONS = (
     "Read, search, and edit Markdown notes in a git-backed Obsidian vault - no Obsidian app "
     "required. Discover with list_vaults / list_notes; read with read_note; find with search "
-    "(ripgrep), backlinks, list_tags, and query_notes (by frontmatter type/tag). Edit with "
-    "write_note, patch_note (insert after a heading or at top/bottom), patch_frontmatter (YAML "
+    "(ripgrep), backlinks, list_tags, and query_notes (by frontmatter type/tag). Read binary "
+    "attachments (images, PDF, audio, video) with list_attachments / read_attachment, and "
+    "Obsidian Canvas files (nodes, groups, colors) with list_canvases / read_canvas / write_canvas. "
+    "Edit notes with write_note, patch_note (insert after a heading or at top/bottom), patch_frontmatter (YAML "
     "keys only), delete_note, and rename_note; review and commit pending changes with git_status "
     "and git_commit. Conventions: note paths are relative to the vault and end in .md; wikilinks "
     "are [[Note Name]] by flat filename; prefer patch_* over rewriting a whole note. Edits are "
