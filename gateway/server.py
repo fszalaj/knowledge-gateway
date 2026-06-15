@@ -21,10 +21,11 @@ INSTRUCTIONS = (
     "required. Discover with list_vaults / list_notes; read with read_note; find with search "
     "(ripgrep), backlinks, list_tags, and query_notes (by frontmatter type/tag). Edit with "
     "write_note, patch_note (insert after a heading or at top/bottom), patch_frontmatter (YAML "
-    "keys only), delete_note, and rename_note - each can commit. Conventions: note paths are "
-    "relative to the vault and end in .md; wikilinks are [[Note Name]] by flat filename; prefer "
-    "patch_* over rewriting a whole note. Edits are atomic and committed to git with author "
-    "attribution; git is the source of truth."
+    "keys only), delete_note, and rename_note; review and commit pending changes with git_status "
+    "and git_commit. Conventions: note paths are relative to the vault and end in .md; wikilinks "
+    "are [[Note Name]] by flat filename; prefer patch_* over rewriting a whole note. Edits are "
+    "atomic, and each edit can optionally commit (commits are pathspec-scoped to the vault and "
+    "attributed to the caller); git is the source of truth."
 )
 
 

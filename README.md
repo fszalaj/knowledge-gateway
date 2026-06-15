@@ -5,9 +5,9 @@ Codex, Cursor, Antigravity) read, search, and **edit** a vault through git-aware
 Obsidian-aware tools - with **no Obsidian GUI running**, and git as the single source of truth.
 
 It exists because the Obsidian *Local REST API* plugin serves only the one vault open in a
-running desktop instance, writes without a lock (silent lost updates), needs a token pasted
-into every client, and fights git-as-source-of-truth. This gateway talks to the Markdown
-files directly.
+running desktop instance, writes without a lock (silent lost updates), requires a token in
+every client, and treats git as secondary. This gateway operates on the Markdown files
+directly, with git as the system of record.
 
 ## Architecture
 
@@ -28,8 +28,8 @@ flowchart LR
     V <-->|atomic write + scoped commit| G[(git)]
 ```
 
-Both modes run the **same** code over the **same** path guards; they differ only in transport
-and trust boundary.
+Both modes run the **same** tool implementation over the **same** path guards; they differ in
+transport, authentication/ACL, vault loading, and error masking.
 
 ## Two ways to run
 
@@ -81,8 +81,9 @@ Add this to the repo's `.mcp.json` at the repo root:
 }
 ```
 
-- `--local` auto-detects the vault in the cwd (a `./wiki`, a single `*-obsidian-vault/`, or a
-  dir with `.obsidian/`). Pass `--vault ./<dir>` instead to be explicit.
+- `--local` auto-detects the vault in the cwd, in order: the cwd itself if it has `.obsidian/`,
+  then `./wiki`, then a single `*-obsidian-vault/`, then a single child dir with `.obsidian/`
+  (ambiguous matches error). Pass `--vault ./<dir>` to be explicit.
 - `--refresh` re-fetches `@stable` each launch, so releases auto-apply (adds ~1-2s to start).
 - Commits are scoped to the vault's git subdir and attributed to your own
   `git config user.name/email`. No token: the trust boundary is local filesystem access.
@@ -104,7 +105,7 @@ Open the repo in your agent, approve the `wiki` server once, done.
 | `patch_note` | insert after a heading or at top/bottom, no full rewrite (+ commit) |
 | `patch_frontmatter` | update YAML frontmatter keys, body intact (+ commit) |
 | `delete_note` | delete a note (+ optional commit) |
-| `rename_note` | rename + optionally fix inbound `[[wikilinks]]` (+ commit) |
+| `rename_note` | rename/move + rewrite inbound flat `[[wikilinks]]` when the name changes (+ optional commit) |
 | `git_status` / `git_commit` | pending changes / commit (subdir-scoped, attributed) |
 
 Edits are atomic (temp file + `rename`). Every path goes through `safe_note_path`, which blocks
@@ -151,7 +152,7 @@ claude mcp add --transport http --scope project teamwiki \
 
 - **No secrets in the repo.** `vaults.yaml` / `tokens.yaml` are gitignored; only
   `*.example.yaml` ship. `tokens.yaml` is refused at load if group/world-readable.
-- **Local mode has no secret surface** - a local stdio subprocess; the trust boundary is
+- **Local mode has no credential surface** - a local stdio subprocess; the trust boundary is
   filesystem access the user already has.
 - **Server mode is defense in depth, not a public endpoint** - tailnet ACL + HTTPS + per-user
   `StaticTokenVerifier` bearer token + per-vault ACL. The bearer layer is a shared secret for
@@ -185,18 +186,21 @@ For the shared server, ask your gateway admin for a token, then run the `claude 
 
 ## Operate (servers)
 
-A server runs the `@stable` release as a `uv tool`, with a daily auto-update that only restarts
-when `stable` moved:
+A server runs the `@stable` release as a `uv tool`, with a daily job that reinstalls and
+restarts only when `stable` moved. Reference units are in `deploy/`:
 
 ```bash
 uv tool install --from git+https://github.com/fszalaj/obsidian-gateway@stable obsidian-gateway
-uv tool upgrade obsidian-gateway          # manual update; then restart the service
+# the binary lives in the uv cache, so point config at the live files via env:
+#   OBSIDIAN_GATEWAY_VAULTS=<dir>/vaults.yaml   OBSIDIAN_GATEWAY_TOKENS=<dir>/tokens.yaml
 ```
 
-Point config at the live files via env (the binary lives in the uv cache, not next to the
-config): `OBSIDIAN_GATEWAY_VAULTS=/path/vaults.yaml`, `OBSIDIAN_GATEWAY_TOKENS=/path/tokens.yaml`.
-Reference units: `deploy/obsidian-gateway.service` (systemd) and the LaunchAgent in the homelab
-deploy. Health check: `curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8765/mcp/` -> `401`.
+- `deploy/obsidian-gateway.service` - the service (systemd `--user`).
+- `deploy/obsidian-gateway-update.{service,timer}` + `deploy/auto-update.sh` - the daily auto-update.
+
+Update now instead of waiting for the timer: `uv tool install --reinstall --from
+git+https://github.com/fszalaj/obsidian-gateway@stable obsidian-gateway`, then restart the
+service. Health: `curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8765/mcp/` -> `401`.
 
 ## Release (maintainers)
 

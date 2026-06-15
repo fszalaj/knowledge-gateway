@@ -5,6 +5,18 @@ All notable changes to obsidian-gateway. Consumers track the moving **`stable`**
 next launch (no per-repo re-pin). Every release is also an immutable `vX.Y.Z` tag for
 pinning/audit.
 
+## v0.4.1 - 2026-06-15
+
+### Docs
+- README rewritten (enterprise style; architecture + `stable`-distribution mermaid diagrams; documents the `stable` "update once" model; AI-setup prompt fixed to `@stable` + `--local`).
+
+### Changed
+- The FastMCP server ships an `instructions` prompt describing the tools + Obsidian/git conventions to connecting agents.
+- Reference deploy artifacts for the `@stable` model: `deploy/obsidian-gateway.service` (uv-tool binary) + `deploy/obsidian-gateway-update.{service,timer}` + `deploy/auto-update.sh`.
+
+### Dependencies
+- `ruamel.yaml` allowed up to `<0.20` (lock 0.19.1; Dependabot).
+
 ## v0.4.0 - 2026-06-15
 
 ### Security

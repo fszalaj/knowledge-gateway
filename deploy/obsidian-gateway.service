@@ -1,8 +1,13 @@
-# systemd unit for the shared-server deploy.
-# Install:  cp deploy/obsidian-gateway.service ~/.config/systemd/user/
-#           systemctl --user daemon-reload && systemctl --user enable --now obsidian-gateway
-#           loginctl enable-linger $USER   # survive logout
-#
+# systemd --user unit for the shared-server deploy. Runs the @stable release installed as a
+# uv tool (see deploy/obsidian-gateway-update.* for daily auto-update).
+# Install:
+#   uv tool install --from git+https://github.com/fszalaj/obsidian-gateway@stable obsidian-gateway
+#   mkdir -p %h/obsidian-gateway
+#   cp vaults.example.yaml %h/obsidian-gateway/vaults.yaml          # edit: name -> path/repo_root/subdir
+#   cp tokens.example.yaml %h/obsidian-gateway/tokens.yaml && chmod 0600 %h/obsidian-gateway/tokens.yaml
+#   cp deploy/obsidian-gateway.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now obsidian-gateway
+#   loginctl enable-linger $USER   # survive logout
 # The gateway binds loopback only; Tailscale Serve is the network front door.
 
 [Unit]
@@ -11,17 +16,16 @@ After=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=%h/obsidian-gateway
 Environment=OBSIDIAN_GATEWAY_HOST=127.0.0.1
 Environment=OBSIDIAN_GATEWAY_PORT=8765
 Environment=OBSIDIAN_GATEWAY_PATH=/mcp/
-ExecStart=%h/.local/bin/uv run --project %h/obsidian-gateway obsidian-gateway
+Environment=OBSIDIAN_GATEWAY_VAULTS=%h/obsidian-gateway/vaults.yaml
+Environment=OBSIDIAN_GATEWAY_TOKENS=%h/obsidian-gateway/tokens.yaml
+ExecStart=%h/.local/bin/obsidian-gateway
 Restart=on-failure
 RestartSec=3
 
-# --- Sandboxing (least privilege at the OS layer) ---
-# Seccomp / capability / rlimit based - safe for a `systemctl --user` unit (no
-# mount-namespace dependency):
+# --- Sandboxing (least privilege; safe for a `systemctl --user` unit, no mount-namespace dep) ---
 NoNewPrivileges=yes
 CapabilityBoundingSet=
 RestrictSUIDSGID=yes
@@ -34,24 +38,17 @@ SystemCallArchitectures=native
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 SystemCallFilter=@system-service
 SystemCallErrorNumber=EPERM
-#
-# Namespace / mount based isolation - ENABLE after verifying your host allows
-# unprivileged user namespaces (most do; some hardened or older hosts do not, where
-# these make a --user unit fail to start). ProtectControlGroups is NOT supported by
-# the per-user manager, so it is intentionally omitted.
+# Namespace/mount isolation - ENABLE after verifying the host allows unprivileged user namespaces:
 # PrivateTmp=yes
 # PrivateDevices=yes
 # ProtectKernelTunables=yes
 # ProtectKernelModules=yes
 # ProtectKernelLogs=yes
 # ProtectHostname=yes
-#
-# Filesystem lockdown - with ProtectSystem=strict the whole FS is read-only except
-# ReadWritePaths, so list every vault repo plus uv's cache or the service cannot
-# write/commit. Do NOT use ProtectHome= (vaults live under $HOME); do NOT set
-# User=/DynamicUser= (already a --user unit).
+# Filesystem lockdown - with ProtectSystem=strict the FS is read-only except ReadWritePaths:
 # ProtectSystem=strict
 # ReadWritePaths=%h/obsidian-gateway %h/.cache/uv %h/.local/share/uv  # + each vault repo path
+# Do NOT use ProtectHome= (vaults + the uv tool live under $HOME); do NOT set User=/DynamicUser=.
 
 [Install]
 WantedBy=default.target
