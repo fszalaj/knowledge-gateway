@@ -97,6 +97,8 @@ Open the repo in your agent, approve the `wiki` server once, done.
 | `list_vaults` | vaults reachable here |
 | `list_notes` | Markdown paths in a vault |
 | `read_note` | raw note content |
+| `list_attachments` / `read_attachment` | list / read binary attachments (image -> inline Image, else File) |
+| `list_canvases` / `read_canvas` / `write_canvas` | list / read / write Obsidian Canvas (nodes, groups, colors) |
 | `search` | ripgrep literal/regex full-text |
 | `backlinks` | notes that `[[wikilink]]` to a note |
 | `list_tags` | inline `#tags` with counts |

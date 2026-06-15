@@ -35,6 +35,21 @@ def test_safe_join_allows_inside(tmp_path):
     assert v.safe_join("a/note.md").is_file()
 
 
+def test_vault_resolves_symlinked_root(tmp_path):
+    # A vault constructed from a symlinked path must still contain correctly: __post_init__
+    # resolves the root so safe_join's resolve()'d target stays relative_to it (else every
+    # op would raise on macOS /tmp and the like).
+    real = tmp_path / "real"
+    real.mkdir()
+    (real / "note.md").write_text("# hi\n")
+    link = tmp_path / "link"
+    link.symlink_to(real, target_is_directory=True)
+    v = Vault(name="t", path=link, repo_root=link, subdir=".")
+    assert v.path == real.resolve()
+    assert v.safe_join("note.md").is_file()
+    assert v.safe_note_path("note.md").read_text() == "# hi\n"
+
+
 def test_list_markdown_excludes_obsidian(tmp_path):
     v = make_vault(tmp_path)
     notes = v.list_markdown()
