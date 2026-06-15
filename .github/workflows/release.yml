@@ -1,0 +1,27 @@
+name: release
+
+# On a vX.Y.Z tag: build the wheel + sdist and publish a GitHub Release with auto notes.
+# CI (ci.yml) also runs on tags, so a release is only cut from a known-green tree.
+# PyPI Trusted Publishing is a planned follow-up (see CHANGELOG).
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+      - run: uv build
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" dist/* --title "${{ github.ref_name }}" --generate-notes

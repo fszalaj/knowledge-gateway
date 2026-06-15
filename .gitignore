@@ -4,6 +4,8 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
+dist/
+build/
 
 # Live config - NEVER commit (paths + bearer tokens live only on the host)
 vaults.yaml
