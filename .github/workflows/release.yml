@@ -1,14 +1,18 @@
 name: release
 
-# On a vX.Y.Z tag: build the wheel + sdist and publish a GitHub Release with auto notes.
-# CI (ci.yml) also runs on tags, so a release is only cut from a known-green tree.
-# PyPI Trusted Publishing is a planned follow-up (see CHANGELOG).
+# On a vX.Y.Z tag: build, publish a GitHub Release, then publish to PyPI via Trusted
+# Publishing (OIDC, no token). CI (ci.yml) also runs on tags, so a release is only cut
+# from a known-green tree. The GitHub Release runs before PyPI so a not-yet-configured
+# Trusted Publisher cannot block it.
+# One-time setup on pypi.org: add a pending publisher for project `obsidian-gateway` ->
+# owner fszalaj, repo obsidian-gateway, workflow release.yml, environment pypi.
 on:
   push:
     tags: ['v*']
 
 permissions:
   contents: write
+  id-token: write
 
 concurrency:
   group: release-${{ github.ref }}
@@ -17,6 +21,7 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+    environment: pypi
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
@@ -25,3 +30,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "${{ github.ref_name }}" dist/* --title "${{ github.ref_name }}" --generate-notes
+      - name: Publish to PyPI (Trusted Publishing)
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
