@@ -1,5 +1,7 @@
 # obsidian-gateway
 
+<!-- mcp-name: io.github.fszalaj/obsidian-gateway -->
+
 A filesystem- and git-native **MCP gateway** for Obsidian vaults. AI agents (Claude Code,
 Codex, Cursor, Antigravity) read, search, and **edit** a vault through git-aware,
 Obsidian-aware tools - with **no Obsidian GUI running**, and git as the single source of truth.
