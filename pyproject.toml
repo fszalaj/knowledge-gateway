@@ -1,6 +1,6 @@
 [project]
 name = "obsidian-gateway"
-version = "0.5.0"
+version = "0.5.1"
 description = "Filesystem/git-native FastMCP gateway serving Obsidian vaults over MCP"
 readme = "README.md"
 license = { text = "MIT" }

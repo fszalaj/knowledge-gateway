@@ -5,6 +5,18 @@ All notable changes to obsidian-gateway. Consumers track the moving **`stable`**
 next launch (no per-repo re-pin). Every release is also an immutable `vX.Y.Z` tag for
 pinning/audit.
 
+## v0.5.1 - 2026-06-16
+
+### Changed
+- **Server instructions**: point agents at `_templates/<type>.md` before creating a page
+  (the folder is already reachable via `list_notes`/`read_note` - no new tools).
+
+### Distribution
+- **PyPI Trusted Publishing**: `release.yml` publishes to PyPI on a `vX.Y.Z` tag via OIDC
+  (no token). First PyPI release - consumers can `uvx obsidian-gateway` (alongside `@stable`).
+- **MCP Registry**: `server.json` manifest + a `mcp-name` marker in the README, for listing
+  in the official MCP Registry.
+
 ## v0.5.0 - 2026-06-15
 
 ### Features (MCP-FEAT)
