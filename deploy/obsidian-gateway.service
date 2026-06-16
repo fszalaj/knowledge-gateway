@@ -1,14 +1,8 @@
-# systemd --user unit for the shared-server deploy. Runs the @stable release installed as a
-# uv tool (see deploy/obsidian-gateway-update.* for daily auto-update).
-# Install:
-#   uv tool install --from git+https://github.com/fszalaj/obsidian-gateway@stable obsidian-gateway
-#   mkdir -p $HOME/obsidian-gateway
-#   cp vaults.example.yaml $HOME/obsidian-gateway/vaults.yaml          # edit: name -> path/repo_root/subdir
-#   cp tokens.example.yaml $HOME/obsidian-gateway/tokens.yaml && chmod 0600 $HOME/obsidian-gateway/tokens.yaml
-#   cp deploy/obsidian-gateway.service ~/.config/systemd/user/
-#   systemctl --user daemon-reload && systemctl --user enable --now obsidian-gateway
-#   loginctl enable-linger $USER   # survive logout
-# The gateway binds loopback only; Tailscale Serve is the network front door.
+# systemd --user unit for the @stable uv-tool deploy (daily auto-update: deploy/obsidian-gateway-update.*).
+# Install: uv tool install --from git+https://github.com/fszalaj/obsidian-gateway@stable obsidian-gateway
+#   cp {vaults,tokens}.example.yaml ~/obsidian-gateway/ (edit; chmod 0600 tokens.yaml)
+#   cp deploy/obsidian-gateway.service ~/.config/systemd/user/ && systemctl --user enable --now obsidian-gateway
+#   loginctl enable-linger $USER   # Tailscale Serve fronts the loopback bind.
 
 [Unit]
 Description=Obsidian MCP gateway (filesystem/git-native)
@@ -26,10 +20,6 @@ ExecStart=%h/.local/bin/obsidian-gateway
 Restart=on-failure
 RestartSec=3
 
-# --- Sandboxing (least privilege). Modern hardening is the DEFAULT here; it was
-#     verified end-to-end on the team host (Debian 13 / systemd 257, unprivileged
-#     LXC): systemd-analyze security 9.2 UNSAFE -> 1.6 OK. The team deploy is a
-#     system unit (User=); this --user template carries the same directives.
 NoNewPrivileges=yes
 CapabilityBoundingSet=
 AmbientCapabilities=
@@ -45,27 +35,20 @@ SystemCallErrorNumber=EPERM
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 UMask=0007
 
-# Kernel + IPC + namespace isolation. These need unprivileged user namespaces;
-# they work on a normal host and on a nesting-enabled LXC. On a restrictive
-# container, probe each first and drop any that fails:
-#   systemd-run --user -p <Directive> /bin/true   # rc 0 = supported
-PrivateTmp=yes
-PrivateDevices=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectKernelLogs=yes
-ProtectControlGroups=yes
-ProtectHostname=yes
-ProtectProc=invisible
-RemoveIPC=yes
-
-# Filesystem lockdown: read-only FS except the vault repos the gateway commits to.
-# Replace the example below with one space-separated entry per vault repo_root
-# (the dirs git writes to). systemd does not allow inline comments on this line.
-ProtectSystem=strict
-ReadWritePaths=%h/obsidian-vaults/example-repo
-# Do NOT use ProtectHome= (vaults and the uv tool may live under $HOME).
-# ProcSubset=pid is intentionally omitted (it hides non-process /proc APIs).
+# Stronger isolation, but needs unprivileged userns (can fail to start without it).
+# Probe per host: systemd-run --user -p <Directive> /bin/true -> rc 0 = supported.
+# Then uncomment what passes and add a ReadWritePaths per vault repo_root.
+# PrivateTmp=yes
+# PrivateDevices=yes
+# ProtectKernelTunables=yes
+# ProtectKernelModules=yes
+# ProtectKernelLogs=yes
+# ProtectControlGroups=yes
+# ProtectHostname=yes
+# ProtectProc=invisible
+# RemoveIPC=yes
+# ProtectSystem=strict
+# ReadWritePaths=%h/obsidian-vaults/your-repo
 
 [Install]
 WantedBy=default.target
