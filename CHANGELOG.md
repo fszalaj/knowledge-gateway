@@ -5,6 +5,14 @@ All notable changes to obsidian-gateway. Consumers track the moving **`stable`**
 next launch (no per-repo re-pin). Every release is also an immutable `vX.Y.Z` tag for
 pinning/audit.
 
+## v0.7.2 - 2026-06-27
+
+### Fixed
+- Three stray `obsidian-gateway` references missed in the rename (caught by review): the
+  `importlib.metadata.version("obsidian-gateway")` lookup in `gateway/__init__.py` (was silently
+  falling back to the wrong version), the `knowledge-gateway-graph` CLI `prog` name, and the git
+  lock-dir name in `gateway/locks.py`.
+
 ## v0.7.1 - 2026-06-27
 
 ### Changed

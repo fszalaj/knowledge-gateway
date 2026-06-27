@@ -1,6 +1,6 @@
 [project]
 name = "knowledge-gateway"
-version = "0.7.1"
+version = "0.7.2"
 description = "Filesystem/git-native FastMCP knowledge gateway: serve an Obsidian vault over MCP, plus optional code-graph and doc-to-markdown tools (formerly obsidian-gateway)"
 readme = "README.md"
 license = { text = "MIT" }

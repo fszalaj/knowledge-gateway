@@ -28,7 +28,7 @@ def _lockfile(repo_root: Path) -> Path:
     # keyed by the repo path.
     git_dir = repo_root / ".git"
     if git_dir.is_dir():
-        d = git_dir / "obsidian-gateway-locks"
+        d = git_dir / "knowledge-gateway-locks"
         try:
             d.mkdir(parents=True, exist_ok=True)
             return d / "write.lock"

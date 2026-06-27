@@ -14,7 +14,7 @@ from pathlib import Path
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="obsidian-gateway-graph",
+    ap = argparse.ArgumentParser(prog="knowledge-gateway-graph",
                                  description="Build a code/Ansible knowledge graph (graph.json).")
     ap.add_argument("source", help="source tree (code repo) to graph")
     ap.add_argument("-o", "--out", required=True, help="output graph.json path")
