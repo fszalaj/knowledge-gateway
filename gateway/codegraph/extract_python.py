@@ -13,7 +13,7 @@ from pathlib import Path
 _FUNC = (ast.FunctionDef, ast.AsyncFunctionDef)
 
 
-def extract(path: Path, rel: str) -> dict:
+def extract(path: Path, rel: str, resolver=None) -> dict:
     try:
         tree = ast.parse(Path(path).read_text(encoding="utf-8", errors="replace"))
     except SyntaxError:
@@ -44,14 +44,23 @@ def extract(path: Path, rel: str) -> dict:
                                   "file_type": "python", "source_file": rel, "source_location": f"L{m.lineno}"})
                     edges.append({"source": cid, "target": mid, "relation": "defines", "confidence": "EXTRACTED"})
 
+    def _imp(target):  # one import edge (module:<rel> first-party, else extmodule:<name>)
+        edges.append({"source": mod, "target": target, "relation": "imports", "confidence": "EXTRACTED"})
+
     for n in ast.walk(tree):
         if isinstance(n, ast.Import):
             for a in n.names:
-                edges.append({"source": mod, "target": f"extmodule:{a.name.split('.')[0]}",
-                              "relation": "imports", "confidence": "EXTRACTED"})
-        elif isinstance(n, ast.ImportFrom) and n.module:
-            edges.append({"source": mod, "target": f"extmodule:{n.module.split('.')[0]}",
-                          "relation": "imports", "confidence": "EXTRACTED"})
+                r = resolver.resolve_py_abs(a.name) if resolver else None
+                _imp(f"module:{r}" if r else f"extmodule:{a.name.split('.')[0]}")
+        elif isinstance(n, ast.ImportFrom):
+            resolved = (resolver.resolve_py_from(rel, n.module, n.level or 0,
+                                                 [al.name for al in n.names])
+                        if resolver else [])
+            if resolved:
+                for r in resolved:
+                    _imp(f"module:{r}")
+            elif n.module:  # unresolved (or no resolver): external top-level, as before
+                _imp(f"extmodule:{n.module.split('.')[0]}")
 
     # within-file calls between top-level functions (INFERRED)
     for fn in [n for n in tree.body if isinstance(n, _FUNC)]:

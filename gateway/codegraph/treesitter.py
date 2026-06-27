@@ -17,6 +17,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .resolve import TS_LANGS
+
 try:  # the broad pass is opt-in; the core install stays light
     from tree_sitter_language_pack import get_parser
     AVAILABLE = True
@@ -233,7 +235,7 @@ def _callee_name(n, src):
     return _clean(_text(last, src)) if last else None
 
 
-def extract(path: Path, rel: str) -> dict:
+def extract(path: Path, rel: str, resolver=None) -> dict:
     if not AVAILABLE:
         return {"nodes": [], "edges": []}
     lang = EXT_LANG.get(path.suffix.lower())
@@ -287,9 +289,9 @@ def extract(path: Path, rel: str) -> dict:
             nxt = add_def(n, "block", container)
         elif k in _IMPORTS:
             for m in _import_target(n, src):
-                tgt = f"extmodule:{m}"
-                edges.append({"source": mod, "target": tgt, "relation": "imports",
-                              "confidence": "EXTRACTED"})
+                r = resolver.resolve_ts(rel, m) if (resolver and lang in TS_LANGS) else None
+                edges.append({"source": mod, "target": f"module:{r}" if r else f"extmodule:{m}",
+                              "relation": "imports", "confidence": "EXTRACTED"})
         elif k in _CALLS:
             nm = _callee_name(n, src)
             if nm:

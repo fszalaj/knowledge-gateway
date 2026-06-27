@@ -5,6 +5,26 @@ All notable changes to knowledge-gateway. Consumers track the moving **`stable`*
 next launch (no per-repo re-pin). Every release is also an immutable `vX.Y.Z` tag for
 pinning/audit.
 
+## v0.8.3 - 2026-06-27
+
+### Fixed
+- **Code-graph now resolves first-party imports to `module:<rel>` file nodes** instead of
+  collapsing every import onto a phantom `extmodule:<name>` node. Previously `god_nodes` degree
+  tracked file size (not fan-in) and `graph_shortest_path` between first-party modules routed
+  through shared phantom nodes (noise). Now:
+  - Python: dotted absolute (`pkg.mod`), relative (`from . / .. import`), and from-import
+    submodules resolve, honoring the graphed-root package anchor (`root.name`).
+  - TS/JS: relative (`./` `../`), `tsconfig.json` `paths`/`baseUrl` aliases (e.g. `@/*` -> `./src/*`),
+    and extensionless / `.js`->`.ts(x)` / `index` resolution.
+  Unresolved specifiers still fall back to `extmodule` (external/third-party). Measured on real
+  repos, first-party import resolution went 0% -> 42-67%, and phantom hubs (`extmodule:backend`,
+  `extmodule:@/lib/db`) became the real shared modules (`database.py`, `lib/auth/index.ts`, ...).
+- The tsconfig reader is string-aware (a char scanner, not a regex), so `//` and `/*` inside
+  string values like `"@/*"`, `"./src/*"`, `"**/*.ts"` no longer corrupt parsing of `paths`.
+
+### Added
+- `gateway/codegraph/resolve.py` (`ImportResolver`) and `tests/test_codegraph_resolve.py`.
+
 ## v0.8.2 - 2026-06-27
 
 ### Docs

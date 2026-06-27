@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from . import extract_ansible, extract_python, treesitter
+from . import extract_ansible, extract_python, resolve, treesitter
 
 SCHEMA_VERSION = 1
 _PRUNE = extract_ansible.PRUNE  # one prune set shared by the Ansible pass and the file walk
@@ -36,20 +36,31 @@ def build_graph(root, languages: list[str] | None = None) -> dict:
     if not root.is_dir():
         raise FileNotFoundError(f"not_found: {root}")
 
-    fragments: list[dict] = [extract_ansible.extract(root)]
-    n_py = n_ts = 0
+    # Phase 1: enumerate the files we will parse, so the resolver can point first-party
+    # imports at their real module:<rel> nodes (not phantom extmodule:<name> nodes).
+    py_files: list[tuple] = []
+    ts_files: list[tuple] = []
     for p in _iter_files(root):
         rel = p.relative_to(root).as_posix()
         if p.suffix == ".py":
-            fragments.append(extract_python.extract(p, rel))
-            n_py += 1
+            py_files.append((p, rel))
         elif p.suffix.lower() in treesitter.LANG_EXTS:
             if languages and treesitter.EXT_LANG.get(p.suffix.lower()) not in languages:
                 continue
-            frag = treesitter.extract(p, rel)
-            if frag["nodes"]:
-                n_ts += 1
-            fragments.append(frag)
+            ts_files.append((p, rel))
+    resolver = resolve.ImportResolver(root, [r for _, r in py_files] + [r for _, r in ts_files])
+
+    # Phase 2: extract (Ansible repo-level + Python ast + tree-sitter), resolving imports.
+    fragments: list[dict] = [extract_ansible.extract(root)]
+    n_py = n_ts = 0
+    for p, rel in py_files:
+        fragments.append(extract_python.extract(p, rel, resolver))
+        n_py += 1
+    for p, rel in ts_files:
+        frag = treesitter.extract(p, rel, resolver)
+        if frag["nodes"]:
+            n_ts += 1
+        fragments.append(frag)
 
     G = nx.DiGraph()
     for frag in fragments:
