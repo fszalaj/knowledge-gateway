@@ -22,11 +22,17 @@ flowchart LR
     subgraph clients [Agents]
         A1[Claude Code]
         A2[Codex]
-        A3[Antigravity / Cursor]
+        A3[Gemini]
+        A4[Copilot - VS Code]
+        A5[Cursor]
+        A6[Antigravity]
     end
     A1 --- M(( MCP ))
     A2 --- M
     A3 --- M
+    A4 --- M
+    A5 --- M
+    A6 --- M
     M -->|stdio, per repo, no auth| L[Local gateway]
     M -->|HTTP + bearer + ACL| S[Shared gateway]
     L --> V[/Vault: Markdown files/]
