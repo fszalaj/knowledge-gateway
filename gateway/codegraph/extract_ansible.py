@@ -8,6 +8,7 @@ calls_filter (Ansible task -> Python filter plugin), and implemented_by (filter 
 from __future__ import annotations
 
 import ast
+import os
 import re
 from pathlib import Path
 
@@ -128,39 +129,58 @@ def extract(root: Path) -> dict:
             if (interesting or used) and tid in nodes:
                 edge(owner, tid, "has_task")
 
-    for meta in root.rglob("roles/*/meta/main.yml"):
-        if _pruned(meta, root):
-            continue
-        rname = meta.parts[-3]
-        node(f"role:{rname}", label=rname, type="role", file_type="ansible",
-             source_file=meta.relative_to(root).as_posix())
-        data = _safe_load(meta) or {}
-        if isinstance(data, dict):
-            for dep in (data.get("dependencies") or []):
-                dn = (dep.get("role") or dep.get("name")) if isinstance(dep, dict) else dep
-                if isinstance(dn, str):
-                    edge(f"role:{rname}", f"role:{dn}", "role_depends_on")
+    # --- roles: detect by STRUCTURE, not a fixed roles/<x>/ path, so we also map a bare
+    # role (the repo root IS a role), a collection of roles at the repo root, and the
+    # standard roles/<x>/ layout. A directory is a role if it has tasks/*.yml or meta/main.yml.
+    def _is_role_dir(d: Path) -> bool:
+        t = d / "tasks"
+        if t.is_dir():
+            try:
+                if any(t.glob("*.yml")) or any(t.glob("*.yaml")):
+                    return True
+            except OSError:
+                pass
+        return (d / "meta" / "main.yml").exists()
 
-    for tf in root.rglob("roles/*/tasks/*.yml"):
-        if _pruned(tf, root):
-            continue
-        rel = tf.relative_to(root).as_posix()
-        rname = tf.parts[-3]
-        node(f"tasksfile:{rel}", label=Path(rel).name, type="tasksfile",
-             file_type="ansible", source_file=rel)
-        node(f"role:{rname}", label=rname, type="role", file_type="ansible")
-        edge(f"role:{rname}", f"tasksfile:{rel}", "has_tasks")
-        walk_tasks(_safe_load(tf), f"tasksfile:{rel}", rel)
+    role_dirs: list[Path] = []
+    if _is_role_dir(root):
+        role_dirs.append(root)
+    for dirpath, dirnames, _ in os.walk(root):
+        dirnames[:] = [x for x in dirnames if x not in PRUNE]  # prune in place
+        d = Path(dirpath)
+        # purely structural: a role's own tasks/handlers/meta dir is not itself a role
+        # (it has no tasks/*.yml or meta/main.yml), so no name-based exclusion is needed.
+        if d != root and _is_role_dir(d):
+            role_dirs.append(d)
 
-    for hf in root.rglob("roles/*/handlers/main.yml"):
-        if _pruned(hf, root):
-            continue
-        hs = _safe_load(hf) or []
-        rel = hf.relative_to(root).as_posix()
-        for h in hs if isinstance(hs, list) else []:
-            if isinstance(h, dict) and h.get("name"):
-                node(f"handler:{h['name']}", label=h["name"], type="handler",
+    for d in dict.fromkeys(role_dirs):
+        rname = d.name if d != root else (root.name or "root")
+        rrel = "." if d == root else d.relative_to(root).as_posix()
+        node(f"role:{rname}", label=rname, type="role", file_type="ansible", source_file=rrel)
+        meta = d / "meta" / "main.yml"
+        if meta.exists():
+            data = _safe_load(meta) or {}
+            if isinstance(data, dict):
+                for dep in (data.get("dependencies") or []):
+                    dn = (dep.get("role") or dep.get("name")) if isinstance(dep, dict) else dep
+                    if isinstance(dn, str):
+                        edge(f"role:{rname}", f"role:{dn}", "role_depends_on")
+        tdir = d / "tasks"
+        if tdir.is_dir():
+            for tf in sorted(list(tdir.glob("*.yml")) + list(tdir.glob("*.yaml"))):
+                rel = tf.relative_to(root).as_posix()
+                node(f"tasksfile:{rel}", label=tf.name, type="tasksfile",
                      file_type="ansible", source_file=rel)
+                edge(f"role:{rname}", f"tasksfile:{rel}", "has_tasks")
+                walk_tasks(_safe_load(tf), f"tasksfile:{rel}", rel)
+        hf = d / "handlers" / "main.yml"
+        if hf.exists():
+            hs = _safe_load(hf) or []
+            rel = hf.relative_to(root).as_posix()
+            for h in hs if isinstance(hs, list) else []:
+                if isinstance(h, dict) and h.get("name"):
+                    node(f"handler:{h['name']}", label=h["name"], type="handler",
+                         file_type="ansible", source_file=rel)
 
     for pb in list(root.glob("playbook_*.yml")) + list(root.glob("*.yml")):
         plays = _safe_load(pb)

@@ -5,6 +5,14 @@ All notable changes to knowledge-gateway. Consumers track the moving **`stable`*
 next launch (no per-repo re-pin). Every release is also an immutable `vX.Y.Z` tag for
 pinning/audit.
 
+## v0.8.1 - 2026-06-27
+
+### Added
+- **Ansible role detection is now structural** - a directory with `tasks/*.yml` or `meta/main.yml`
+  is a role. This maps a bare role (the repo root *is* a role), a collection of roles at the repo
+  root (`<root>/<role>/...`), and the standard `roles/<x>/` layout - not only `roles/<x>/`. Roles
+  stay keyed by bare name so `uses_role`/`include_role`/`role_depends_on` edges connect.
+
 ## v0.8.0 - 2026-06-27
 
 ### Added

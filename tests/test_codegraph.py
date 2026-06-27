@@ -47,6 +47,29 @@ def test_ansible_extracts_roles_filters_and_calls_filter(tmp_path):
     assert any(r == "implemented_by" for _, r, _ in rels)
 
 
+def test_bare_role_at_repo_root(tmp_path):
+    # a repo that IS a single Ansible role (no roles/<x>/ wrapper) - detect by structure
+    _write(tmp_path / "meta/main.yml", "dependencies:\n  - role: common\n")
+    _write(tmp_path / "tasks/main.yml", "- name: do\n  command: echo hi\n  notify: restart\n")
+    _write(tmp_path / "handlers/main.yml", "- name: restart\n  debug: msg=ok\n")
+    frag = extract_ansible.extract(tmp_path)
+    ids = {n["id"] for n in frag["nodes"]}
+    rels = {(e["source"], e["relation"], e["target"]) for e in frag["edges"]}
+    rname = f"role:{tmp_path.name}"
+    assert rname in ids                                            # the repo root mapped as a role
+    assert any(s == rname and r == "has_tasks" for s, r, _ in rels)
+    assert any(s == rname and r == "role_depends_on" and t == "role:common" for s, r, t in rels)
+
+
+def test_role_collection_at_repo_root(tmp_path):
+    # a repo that is several roles side by side (e.g. shared/<role>/...)
+    _write(tmp_path / "utility-mail-role/tasks/main.yml", "- name: send\n  debug: msg=hi\n")
+    _write(tmp_path / "utility-log-role/tasks/main.yml", "- name: log\n  debug: msg=hi\n")
+    frag = extract_ansible.extract(tmp_path)
+    ids = {n["id"] for n in frag["nodes"]}
+    assert "role:utility-mail-role" in ids and "role:utility-log-role" in ids
+
+
 def test_python_extractor(tmp_path):
     p = tmp_path / "m.py"
     _write(p, "import os\n\ndef helper():\n    return 1\n\ndef main():\n    return helper()\n\nclass C:\n    pass\n")
