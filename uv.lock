@@ -855,7 +855,7 @@ wheels = [
 
 [[package]]
 name = "knowledge-gateway"
-version = "0.7.5"
+version = "0.8.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastmcp" },
@@ -877,6 +877,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
+    { name = "tree-sitter-language-pack" },
 ]
 graph = [
     { name = "networkx" },
@@ -901,6 +902,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6,<7" },
     { name = "ruamel-yaml", specifier = ">=0.18,<0.20" },
     { name = "tree-sitter-language-pack", marker = "extra == 'all'", specifier = ">=0.7" },
+    { name = "tree-sitter-language-pack", marker = "extra == 'dev'", specifier = ">=0.7" },
     { name = "tree-sitter-language-pack", marker = "extra == 'graph-all'", specifier = ">=0.7" },
 ]
 provides-extras = ["graph", "graph-all", "convert", "all", "dev"]

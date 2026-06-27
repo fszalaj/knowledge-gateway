@@ -130,7 +130,7 @@ Two opt-in capabilities, gated behind extras so the core install stays dependenc
 | Extra | Adds |
 |---|---|
 | `[graph]` | Python (`ast`) + Ansible (PyYAML) code graph + the query tools |
-| `[graph-all]` | the above plus a broad tree-sitter pass (JS/TS/Go/Rust/Terraform/bash/PowerShell/...) |
+| `[graph-all]` | the above + a broad tree-sitter pass over ~30 languages (JS/TS/TSX, Go, Rust, Java, C#, C/C++, Ruby, PHP, bash, PowerShell, Terraform/HCL, Lua, Kotlin, Swift, Scala, R, Perl, Elixir, Dart, SQL, ...): definitions, `imports`, and within-file `calls` |
 | `[convert]` | attachment -> Markdown via markitdown |
 
 **Build a graph** (AST-only - local, no network, no LLM) where the code lives:

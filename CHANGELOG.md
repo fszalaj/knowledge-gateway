@@ -5,6 +5,24 @@ All notable changes to knowledge-gateway. Consumers track the moving **`stable`*
 next launch (no per-repo re-pin). Every release is also an immutable `vX.Y.Z` tag for
 pinning/audit.
 
+## v0.8.0 - 2026-06-27
+
+### Added
+- **Broad multi-language code graph (the `[graph-all]` tree-sitter pass) now works** across ~30
+  languages: JS/TS/TSX, Go, Rust, Java, C#, C/C++, Ruby, PHP, bash, PowerShell, Terraform/HCL,
+  Lua, Kotlin, Swift, Scala, R, Perl, Elixir, Clojure, Dart, SQL, Groovy, Julia, Solidity,
+  Haskell, OCaml. Each file yields definitions (functions / methods / classes / structs /
+  interfaces / traits / enums / types / namespaces + HCL resources), `defines` containment,
+  `imports` edges (`extmodule:<name>`, capturing framework/library use), and within-file `calls`.
+
+### Fixed
+- The tree-sitter pass was **silently broken**: it was written for upstream py-tree-sitter
+  (`parse(bytes)`, `node.type`, `node.children`) but the bundled binding exposes methods and a
+  str-only `parse()`, so every file threw and the error was swallowed -> zero nodes. The extractor
+  now uses portable accessors that handle both bindings, drops anonymous-arrow params being mistaken
+  for defs, and bounds traversal. Added `tests/test_treesitter.py` + `tree-sitter-language-pack` in
+  the `dev` extra so CI exercises the broad pass.
+
 ## v0.7.5 - 2026-06-27
 
 ### Distribution
