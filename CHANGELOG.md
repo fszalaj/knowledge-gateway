@@ -5,6 +5,12 @@ All notable changes to knowledge-gateway. Consumers track the moving **`stable`*
 next launch (no per-repo re-pin). Every release is also an immutable `vX.Y.Z` tag for
 pinning/audit.
 
+## v0.8.2 - 2026-06-27
+
+### Docs
+- README architecture diagram lists each client separately (Claude Code, Codex, Gemini,
+  Copilot / VS Code, Cursor, Antigravity) instead of grouping Cursor/Antigravity and omitting VS Code.
+
 ## v0.8.1 - 2026-06-27
 
 ### Added
