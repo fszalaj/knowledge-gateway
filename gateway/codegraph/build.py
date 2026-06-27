@@ -13,8 +13,7 @@ from pathlib import Path
 from . import extract_ansible, extract_python, treesitter
 
 SCHEMA_VERSION = 1
-_PRUNE = {".git", "node_modules", ".venv", "venv", "__pycache__", ".graph",
-          "dist", "build", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox"}
+_PRUNE = extract_ansible.PRUNE  # one prune set shared by the Ansible pass and the file walk
 
 
 def _iter_files(root: Path):

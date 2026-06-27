@@ -145,4 +145,6 @@ def stats(vault_path: Path, name: str) -> dict:
         data = json.loads(p.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         raise ValueError(f"graph_invalid: {name}: {e}")
-    return data.get("graph", {}) if isinstance(data, dict) else {}
+    if not isinstance(data, dict) or not isinstance(data.get("nodes"), list) or not isinstance(data.get("links"), list):
+        raise ValueError(f"graph_invalid: {name}: not a node-link graph")
+    return data.get("graph", {})

@@ -18,6 +18,12 @@ INCLUDE_TASKS = {"include_tasks", "import_tasks",
 INCLUDE_ROLE = {"include_role", "import_role",
                 "ansible.builtin.include_role", "ansible.builtin.import_role"}
 _FILTER_RE = re.compile(r"\|\s*([a-zA-Z_]\w*)")
+PRUNE = {".git", "node_modules", ".venv", "venv", "__pycache__", ".graph",
+         "dist", "build", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox"}
+
+
+def _pruned(p, root) -> bool:
+    return any(part in PRUNE for part in p.relative_to(root).parts)
 
 
 def _safe_load(path: Path):
@@ -58,14 +64,17 @@ def extract(root: Path) -> dict:
     # --- filter plugins: name -> function (what `| name` resolves to) ---
     filter_names: set[str] = set()
     for py in root.rglob("filter_plugins/*.py"):
+        if _pruned(py, root):
+            continue
         rel = py.relative_to(root).as_posix()
         try:
             tree = ast.parse(py.read_text(encoding="utf-8", errors="replace"))
         except SyntaxError:
             continue
-        for fn in {f.name for f in ast.walk(tree) if isinstance(f, ast.FunctionDef)}:
-            node(f"pyfunc:{rel}:{fn}", label=fn, type="function",
-                 file_type="python", source_file=rel)
+        for f in tree.body:  # module-level functions only - avoid bogus method ids
+            if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                node(f"pyfunc:{rel}:{f.name}", label=f.name, type="function",
+                     file_type="python", source_file=rel)
         for n in ast.walk(tree):
             if isinstance(n, ast.FunctionDef) and n.name == "filters":
                 for d in ast.walk(n):
@@ -120,6 +129,8 @@ def extract(root: Path) -> dict:
                 edge(owner, tid, "has_task")
 
     for meta in root.rglob("roles/*/meta/main.yml"):
+        if _pruned(meta, root):
+            continue
         rname = meta.parts[-3]
         node(f"role:{rname}", label=rname, type="role", file_type="ansible",
              source_file=meta.relative_to(root).as_posix())
@@ -131,6 +142,8 @@ def extract(root: Path) -> dict:
                     edge(f"role:{rname}", f"role:{dn}", "role_depends_on")
 
     for tf in root.rglob("roles/*/tasks/*.yml"):
+        if _pruned(tf, root):
+            continue
         rel = tf.relative_to(root).as_posix()
         rname = tf.parts[-3]
         node(f"tasksfile:{rel}", label=Path(rel).name, type="tasksfile",
@@ -140,6 +153,8 @@ def extract(root: Path) -> dict:
         walk_tasks(_safe_load(tf), f"tasksfile:{rel}", rel)
 
     for hf in root.rglob("roles/*/handlers/main.yml"):
+        if _pruned(hf, root):
+            continue
         hs = _safe_load(hf) or []
         rel = hf.relative_to(root).as_posix()
         for h in hs if isinstance(hs, list) else []:
