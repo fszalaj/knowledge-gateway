@@ -20,6 +20,7 @@ classifiers = [
 # deliberately after testing. The committed uv.lock pins the exact transitive tree.
 dependencies = [
     "fastmcp>=3,<4",
+    "mcp>=1.28.1",  # floor: GHSA WebSocket Host/Origin validation (dependabot #1)
     "pyyaml>=6,<7",
     "ruamel.yaml>=0.18,<0.20",
 ]
@@ -29,11 +30,12 @@ dependencies = [
 # graph     = Python (ast) + Ansible (yaml) code graph + query tools.
 # graph-all = the above plus a broad tree-sitter pass (JS/TS/Go/Rust/Terraform/...).
 # convert   = attachment -> markdown (markitdown).
+# tree-sitter pinned <0.26: 0.26 segfaults parsing large TS repos (tulisko).
 graph = ["networkx>=3.4,<4"]
-graph-all = ["networkx>=3.4,<4", "tree-sitter-language-pack>=0.7"]
+graph-all = ["networkx>=3.4,<4", "tree-sitter-language-pack>=0.7", "tree-sitter>=0.25,<0.26"]
 convert = ["markitdown>=0.1"]
-all = ["networkx>=3.4,<4", "tree-sitter-language-pack>=0.7", "markitdown>=0.1"]
-dev = ["pytest>=8.0", "pytest-cov>=5.0", "pytest-asyncio>=0.24", "networkx>=3.4,<4", "tree-sitter-language-pack>=0.7"]
+all = ["networkx>=3.4,<4", "tree-sitter-language-pack>=0.7", "tree-sitter>=0.25,<0.26", "markitdown>=0.1"]
+dev = ["pytest>=8.0", "pytest-cov>=5.0", "pytest-asyncio>=0.24", "networkx>=3.4,<4", "tree-sitter-language-pack>=0.7", "tree-sitter>=0.25,<0.26"]
 
 [project.urls]
 Homepage = "https://github.com/fszalaj/knowledge-gateway"
