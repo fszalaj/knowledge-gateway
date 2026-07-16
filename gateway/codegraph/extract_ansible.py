@@ -23,14 +23,14 @@ PRUNE = {"node_modules", "venv", "__pycache__", "dist", "build",
          "coverage", "htmlcov", "target", "vendor"}
 
 
-def skip_dir(name: str, extra: frozenset[str] = frozenset()) -> bool:
+def skip_dir(name: str, extra: frozenset[str] = frozenset(),
+             keep: frozenset[str] = frozenset()) -> bool:
     """Directories never worth graphing: hidden (.git, .next, .venv, .graph, caches...),
-    known build/vendor output, plus caller-supplied names."""
+    known build/vendor output, plus caller-supplied names. `keep` overrides all of it
+    for repos with real code in e.g. .github/ or a first-party vendor/."""
+    if name in keep:
+        return False
     return name.startswith(".") or name in PRUNE or name in extra
-
-
-def _pruned(p, root, extra: frozenset[str] = frozenset()) -> bool:
-    return any(skip_dir(part, extra) for part in p.relative_to(root).parts)
 
 
 def _safe_load(path: Path):
@@ -51,10 +51,22 @@ def _iter_strings(obj):
             yield from _iter_strings(v)
 
 
-def extract(root: Path, exclude: frozenset[str] = frozenset()) -> dict:
+def extract(root: Path, exclude: frozenset[str] = frozenset(),
+            include: frozenset[str] = frozenset()) -> dict:
     root = Path(root)
     nodes: dict[str, dict] = {}
     edges: list[dict] = []
+
+    # One pruned walk feeds both passes below (filter plugins + structural role
+    # detection) - rglob would traverse .next/node_modules/... before filtering.
+    filter_plugin_files: list[Path] = []
+    candidate_dirs: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = sorted(x for x in dirnames if not skip_dir(x, exclude, include))  # sorted: deterministic output
+        d = Path(dirpath)
+        candidate_dirs.append(d)
+        if d.name == "filter_plugins":
+            filter_plugin_files += sorted(d / f for f in filenames if f.endswith(".py"))
 
     def node(nid, **attrs):
         cur = nodes.setdefault(nid, {"id": nid})
@@ -70,9 +82,7 @@ def extract(root: Path, exclude: frozenset[str] = frozenset()) -> dict:
 
     # --- filter plugins: name -> function (what `| name` resolves to) ---
     filter_names: set[str] = set()
-    for py in root.rglob("filter_plugins/*.py"):
-        if _pruned(py, root, exclude):
-            continue
+    for py in filter_plugin_files:
         rel = py.relative_to(root).as_posix()
         try:
             tree = ast.parse(py.read_text(encoding="utf-8", errors="replace"))
@@ -151,9 +161,7 @@ def extract(root: Path, exclude: frozenset[str] = frozenset()) -> dict:
     role_dirs: list[Path] = []
     if _is_role_dir(root):
         role_dirs.append(root)
-    for dirpath, dirnames, _ in os.walk(root):
-        dirnames[:] = [x for x in dirnames if not skip_dir(x, exclude)]  # prune in place
-        d = Path(dirpath)
+    for d in candidate_dirs:
         # purely structural: a role's own tasks/handlers/meta dir is not itself a role
         # (it has no tasks/*.yml or meta/main.yml), so no name-based exclusion is needed.
         if d != root and _is_role_dir(d):

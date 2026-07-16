@@ -147,8 +147,10 @@ knowledge-gateway-graph /path/to/code-repo -o /path/to/vault/.graph/myrepo.json
 ```
 
 Hidden directories (`.git`, `.next`, `.venv`, caches, ...) and common build/vendor output
-(`node_modules`, `dist`, `build`, `target`, `vendor`, ...) are always skipped;
-`--exclude <name> ...` (CLI) / `exclude` (tool) adds more directory names.
+(`node_modules`, `dist`, `build`, `target`, `vendor`, ...) are always skipped.
+`--exclude <name> ...` adds directory names to skip; `--include <name> ...` force-keeps
+names the rule would skip (e.g. `.github`, a first-party `vendor/`). Matching is by
+directory basename, not path or glob. Same `exclude`/`include` on the `graph_build` tool.
 
 **Query it** over MCP with `graph_query` / `graph_neighbors` / `god_nodes` /
 `graph_shortest_path` / `graph_stats`. The graph captures functions/classes/imports/calls and -

@@ -108,3 +108,30 @@ def test_build_graph_prunes_junk_dirs(tmp_path):
     ids = {n["id"] for n in data["nodes"]}
     assert "pyfunc:app/main.py:real" in ids
     assert not any("junk" in i for i in ids), ids
+
+
+def test_ansible_pass_prunes_junk_dirs(tmp_path):
+    _ansible_repo(tmp_path)
+    # a vendored copy of a role and its filter plugins must not produce nodes
+    _write(tmp_path / "node_modules/dep/roles/junkrole/tasks/main.yml",
+           "- name: junk\n  debug: msg=hi\n")
+    _write(tmp_path / ".venv/filter_plugins/junk_filters.py",
+           "def junk_f(x):\n    return x\n\n"
+           "class FilterModule:\n    def filters(self):\n        return {'junk_f': junk_f}\n")
+    frag = extract_ansible.extract(tmp_path)
+    ids = {n["id"] for n in frag["nodes"]}
+    assert "role:web" in ids
+    assert "role:junkrole" not in ids
+    assert "filter:junk_f" not in ids
+
+
+def test_build_graph_include_overrides_prune(tmp_path):
+    _write(tmp_path / "app/main.py", "def real():\n    return 1\n")
+    _write(tmp_path / ".github/scripts/ci.py", "def ci_check():\n    return 1\n")
+    _write(tmp_path / "vendor/firstparty/lib.py", "def vendored():\n    return 1\n")
+    ids = {n["id"] for n in build_graph(tmp_path)["nodes"]}
+    assert "pyfunc:.github/scripts/ci.py:ci_check" not in ids
+    assert "pyfunc:vendor/firstparty/lib.py:vendored" not in ids
+    ids = {n["id"] for n in build_graph(tmp_path, include=[".github", "vendor"])["nodes"]}
+    assert "pyfunc:.github/scripts/ci.py:ci_check" in ids
+    assert "pyfunc:vendor/firstparty/lib.py:vendored" in ids
