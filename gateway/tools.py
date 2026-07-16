@@ -285,13 +285,15 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
     # only exposed in local stdio mode where the trust boundary is local filesystem access.
     if local:
         @wtool
-        def graph_build(vault: str, source: str, name: str = "default", languages: list[str] | None = None) -> dict:
-            """Build a code/Ansible graph from a source tree and store it at .graph/<name>.json."""
+        def graph_build(vault: str, source: str, name: str = "default", languages: list[str] | None = None,
+                        exclude: list[str] | None = None) -> dict:
+            """Build a code/Ansible graph from a source tree and store it at .graph/<name>.json.
+            Hidden dirs and common build/vendor dirs are always skipped; `exclude` adds more."""
             v = _vault(vault, write=True)
             out = graphmod.graph_file(v.path, name, must_exist=False)  # sanitised + vault-contained
             from .codegraph import build_graph
             src = Path(source).expanduser().resolve()
-            data = build_graph(src, languages=languages)
+            data = build_graph(src, languages=languages, exclude=exclude)
             out.parent.mkdir(exist_ok=True)
             atomic_write(out, json.dumps(data, ensure_ascii=False))
             g = data.get("graph", {})

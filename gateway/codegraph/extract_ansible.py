@@ -19,12 +19,18 @@ INCLUDE_TASKS = {"include_tasks", "import_tasks",
 INCLUDE_ROLE = {"include_role", "import_role",
                 "ansible.builtin.include_role", "ansible.builtin.import_role"}
 _FILTER_RE = re.compile(r"\|\s*([a-zA-Z_]\w*)")
-PRUNE = {".git", "node_modules", ".venv", "venv", "__pycache__", ".graph",
-         "dist", "build", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox"}
+PRUNE = {"node_modules", "venv", "__pycache__", "dist", "build",
+         "coverage", "htmlcov", "target", "vendor"}
 
 
-def _pruned(p, root) -> bool:
-    return any(part in PRUNE for part in p.relative_to(root).parts)
+def skip_dir(name: str, extra: frozenset[str] = frozenset()) -> bool:
+    """Directories never worth graphing: hidden (.git, .next, .venv, .graph, caches...),
+    known build/vendor output, plus caller-supplied names."""
+    return name.startswith(".") or name in PRUNE or name in extra
+
+
+def _pruned(p, root, extra: frozenset[str] = frozenset()) -> bool:
+    return any(skip_dir(part, extra) for part in p.relative_to(root).parts)
 
 
 def _safe_load(path: Path):
@@ -45,7 +51,7 @@ def _iter_strings(obj):
             yield from _iter_strings(v)
 
 
-def extract(root: Path) -> dict:
+def extract(root: Path, exclude: frozenset[str] = frozenset()) -> dict:
     root = Path(root)
     nodes: dict[str, dict] = {}
     edges: list[dict] = []
@@ -65,7 +71,7 @@ def extract(root: Path) -> dict:
     # --- filter plugins: name -> function (what `| name` resolves to) ---
     filter_names: set[str] = set()
     for py in root.rglob("filter_plugins/*.py"):
-        if _pruned(py, root):
+        if _pruned(py, root, exclude):
             continue
         rel = py.relative_to(root).as_posix()
         try:
@@ -146,7 +152,7 @@ def extract(root: Path) -> dict:
     if _is_role_dir(root):
         role_dirs.append(root)
     for dirpath, dirnames, _ in os.walk(root):
-        dirnames[:] = [x for x in dirnames if x not in PRUNE]  # prune in place
+        dirnames[:] = [x for x in dirnames if not skip_dir(x, exclude)]  # prune in place
         d = Path(dirpath)
         # purely structural: a role's own tasks/handlers/meta dir is not itself a role
         # (it has no tasks/*.yml or meta/main.yml), so no name-based exclusion is needed.

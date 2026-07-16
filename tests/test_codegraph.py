@@ -95,3 +95,16 @@ def test_build_graph_roundtrip(tmp_path):
     # communities baked onto nodes
     assert all("id" in n for n in data["nodes"])
     assert len(s) > 100
+
+
+def test_build_graph_prunes_junk_dirs(tmp_path):
+    _write(tmp_path / "app/main.py", "def real():\n    return 1\n")
+    # hidden dirs, build output and vendored deps must never enter the graph
+    _write(tmp_path / ".next/server/chunk.py", "def junk_next():\n    return 0\n")
+    _write(tmp_path / "node_modules/pkg/index.py", "def junk_nm():\n    return 0\n")
+    _write(tmp_path / "dist/bundle.py", "def junk_dist():\n    return 0\n")
+    _write(tmp_path / "generated/gen.py", "def junk_gen():\n    return 0\n")
+    data = build_graph(tmp_path, exclude=["generated"])
+    ids = {n["id"] for n in data["nodes"]}
+    assert "pyfunc:app/main.py:real" in ids
+    assert not any("junk" in i for i in ids), ids

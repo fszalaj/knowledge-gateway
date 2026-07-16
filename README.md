@@ -146,6 +146,10 @@ knowledge-gateway-graph /path/to/code-repo -o /path/to/vault/.graph/myrepo.json
 # in a local-mode session the graph_build tool does the same, writing .graph/<name>.json
 ```
 
+Hidden directories (`.git`, `.next`, `.venv`, caches, ...) and common build/vendor output
+(`node_modules`, `dist`, `build`, `target`, `vendor`, ...) are always skipped;
+`--exclude <name> ...` (CLI) / `exclude` (tool) adds more directory names.
+
 **Query it** over MCP with `graph_query` / `graph_neighbors` / `god_nodes` /
 `graph_shortest_path` / `graph_stats`. The graph captures functions/classes/imports/calls and -
 uniquely for Ansible - roles, tasks, handlers, `include_role`/`import_tasks`/`notify`, and
