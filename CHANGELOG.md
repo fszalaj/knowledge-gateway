@@ -5,6 +5,22 @@ All notable changes to knowledge-gateway. Consumers track the **PyPI** package
 per-repo re-pin). The `stable` git branch is a permanent alias for the same release, for
 pinning straight from git. Every release is also an immutable `vX.Y.Z` tag for pinning/audit.
 
+## v0.9.0 - 2026-08-18
+
+### Changed
+- `[graph]` now installs the tree-sitter parser pack, so the code graph covers all ~30 supported
+  languages by default. Asking for a code graph and getting one that cannot read your language
+  was the wrong default. `[graph-slim]` is the old Python-and-Ansible-only profile;
+  `[graph-all]` stays as an alias of `[graph]` so existing pins keep resolving.
+- README corrected: the code graph is no longer described as an optional add-on or as an
+  "Ansible" graph, the release procedure matches the automation (a version bump on `main` is the
+  whole release), the server update job keys on the published version rather than on `stable`
+  moving, and a new **Branches** table states what `main`, `stable` and `vX.Y.Z` each mean -
+  including that `stable` currently equals the latest release and exists so it can lag `main`
+  later without any consumer changing a pin.
+- Package summary no longer calls the code graph optional; it is a first-class capability of the
+  recommended install.
+
 ## v0.8.9 - 2026-08-18
 
 ### Changed

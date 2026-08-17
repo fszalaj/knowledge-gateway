@@ -1,4 +1,4 @@
-"""Build a NetworkX code/Ansible graph from a source tree and return node-link JSON.
+"""Build a NetworkX multi-language code graph from a source tree and return node-link JSON.
 
 Passes: Ansible (PyYAML, repo-level) + Python (ast, per file) + optional broad
 languages (tree-sitter, per file). Communities (greedy modularity) are baked onto

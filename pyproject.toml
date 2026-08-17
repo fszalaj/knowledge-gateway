@@ -1,7 +1,7 @@
 [project]
 name = "knowledge-gateway"
-version = "0.8.9"
-description = "Filesystem/git-native FastMCP knowledge gateway: serve an Obsidian vault over MCP, plus optional code-graph and doc-to-markdown tools"
+version = "0.9.0"
+description = "Filesystem/git-native FastMCP knowledge gateway: serve an Obsidian vault over MCP, with a multi-language code graph and doc-to-markdown tools"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "Filip Szalaj" }]
@@ -28,11 +28,15 @@ dependencies = [
 
 [project.optional-dependencies]
 # Optional, opt-in capabilities. Core (vault) tools need none of these.
-# graph     = Python (ast) + Ansible (yaml) code graph + query tools.
-# graph-all = the above plus a broad tree-sitter pass (JS/TS/Go/Rust/Terraform/...).
-# convert   = PDF/Office/image/HTML -> Markdown (MarkItDown with PDF/Office converters).
+# graph      = code graph over every supported language (tree-sitter) + Python (ast) +
+#              Ansible (yaml) + the query tools. Asking for a code graph and getting one that
+#              cannot read your language is a worse default than a heavier install.
+# graph-slim = Python + Ansible only, no parser pack, for a Python/Ansible-only target.
+# graph-all  = kept as an alias of `graph` so existing pins keep resolving.
+# convert    = PDF/Office/image/HTML -> Markdown (MarkItDown with PDF/Office converters).
 # tree-sitter 0.26 segfaults while parsing large TypeScript repositories.
-graph = ["networkx>=3.4,<4"]
+graph = ["networkx>=3.4,<4", "tree-sitter-language-pack>=0.7", "tree-sitter>=0.25,<0.26"]
+graph-slim = ["networkx>=3.4,<4"]
 graph-all = ["networkx>=3.4,<4", "tree-sitter-language-pack>=0.7", "tree-sitter>=0.25,<0.26"]
 convert = ["markitdown[pdf,docx,pptx,xlsx,xls,outlook]>=0.1"]
 all = ["networkx>=3.4,<4", "tree-sitter-language-pack>=0.7", "tree-sitter>=0.25,<0.26", "markitdown[pdf,docx,pptx,xlsx,xls,outlook]>=0.1"]

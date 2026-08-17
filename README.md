@@ -6,14 +6,17 @@ A single MCP server that gives agents (Claude Code, Codex, Cursor, Gemini, Copil
 three capabilities over one connection:
 
 - **Vault** - read, search, and **edit** a git-backed Markdown/Obsidian vault (no Obsidian GUI), git as the source of truth.
-- **Code graph** *(optional `[graph]` / `[graph-all]`)* - build and query a code/Ansible knowledge graph of a repo (functions, calls, roles, tasks, handlers, `task -> filter` edges); AST-only, local, no LLM.
-- **Convert** *(optional `[convert]`)* - turn PDF / Office / image / HTML files into Markdown.
+- **Code graph** - build and query a knowledge graph of a repo: definitions, imports and calls across ~30 languages (TypeScript/JavaScript, Go, Rust, Java, C#, C/C++, Ruby, PHP, Kotlin, Swift, Terraform/HCL and more) plus Python, and a dedicated Ansible pass for roles, tasks, handlers and `notify` edges. AST-only, local, no LLM.
+- **Convert** *(`[convert]`)* - turn PDF / Office / image / HTML files into Markdown.
+
+Install `knowledge-gateway[graph]` - the vault tools and the code graph. `[convert]` is separate
+only because its PDF/Office parsers pull a materially larger, native-extension dependency tree.
 
 The vault layer exists because the Obsidian *Local REST API* plugin serves only the one vault open
 in a running desktop instance, writes without a lock (silent lost updates), needs a token in every
 client, and treats git as secondary. This gateway operates on the files directly, with git as the
-system of record - and adds the graph + convert tools the same way: one server, opt-in extras, no
-new servers to wire.
+system of record - and serves the graph and convert tools over the same connection: one server,
+no new servers to wire.
 
 ## Architecture
 
@@ -76,11 +79,23 @@ flowchart LR
 - Every release is **also** an immutable `vX.Y.Z` git tag - pin `==X.Y.Z` when you need a
   frozen, auditable version.
 
-> The **`stable`** git branch remains as a permanent alias for the latest release - every
-> release moves it, so a `@stable` pin never goes stale. PyPI is the recommended channel
-> (`--from 'knowledge-gateway[graph]'`); use `@stable` only when you must install straight
-> from git:
-> `uvx --refresh --from 'knowledge-gateway[graph] @ git+https://github.com/fszalaj/knowledge-gateway@stable' knowledge-gateway`.
+### Branches
+
+| Ref | What it is |
+|---|---|
+| `main` | development and the latest release. Every release is cut from a green `ci` here |
+| `stable` | the release channel. **Today it is the latest release**, moved by `release.yml` on every publish, so `main` and `stable` name the same commit right after a release |
+| `vX.Y.Z` | immutable tag per release, for a frozen or auditable pin |
+
+`stable` is kept as a separate ref on purpose. It costs one step per release now, and it is the
+place to slow down later: when releases need soaking before they reach consumers, `stable` stops
+tracking every publish and starts lagging `main` by whatever vetting we decide on - without any
+consumer having to change a pin. Anything already pinned to `@stable` keeps working through that
+change; that is the whole point of the indirection.
+
+PyPI is the recommended channel (`--from 'knowledge-gateway[graph]'`). Use `@stable` only when
+you must install straight from git:
+`uvx --refresh --from 'knowledge-gateway[graph] @ git+https://github.com/fszalaj/knowledge-gateway@stable' knowledge-gateway`.
 
 ## Quickstart - local mode (zero secrets)
 
@@ -91,7 +106,7 @@ Add this to the repo's `.mcp.json` at the repo root:
   "mcpServers": {
     "wiki": {
       "command": "uvx",
-      "args": ["--refresh", "--from", "knowledge-gateway",
+      "args": ["--refresh", "--from", "knowledge-gateway[graph]",
                "knowledge-gateway", "--local"]
     }
   }
@@ -126,9 +141,9 @@ Open the repo in your agent, approve the `wiki` server once, done.
 | `delete_note` | delete a note (+ optional commit) |
 | `rename_note` | rename/move + rewrite inbound flat `[[wikilinks]]` when the name changes (+ optional commit) |
 | `git_status` / `git_commit` | pending changes / commit (subdir-scoped, attributed) |
-| `list_graphs` / `graph_query` / `graph_neighbors` / `god_nodes` / `graph_shortest_path` / `graph_stats` | query a built code graph (optional `[graph]`) |
-| `graph_build` | build a code/Ansible graph from a source tree into `.graph/<name>.json` (local mode only) |
-| `convert_to_markdown` | convert a file (PDF/Office/image/HTML/...) in the vault to Markdown (optional `[convert]`) |
+| `list_graphs` / `graph_query` / `graph_neighbors` / `god_nodes` / `graph_shortest_path` / `graph_stats` | query a built code graph |
+| `graph_build` | build a code graph from a source tree into `.graph/<name>.json` (local mode only) |
+| `convert_to_markdown` | convert a file (PDF/Office/image/HTML/...) in the vault to Markdown (needs `[convert]`) |
 
 Note writes are atomic (temp file + `rename`) and use `safe_note_path`. Attachments, canvases,
 conversion inputs and graph files use their own type-specific containment guards. Together they
@@ -167,7 +182,7 @@ diff. The copied files are then owned and versioned by the consumer repository.
 See [`docs/agent-skills.md`](docs/agent-skills.md) for the compatibility matrix, required extras,
 workflow harness, maintenance rules and security boundaries.
 
-For the complete pack, run local mode with all optional capabilities:
+For the complete pack, run local mode with every capability, conversion included:
 
 ```jsonc
 {
@@ -189,14 +204,17 @@ For the complete pack, run local mode with all optional capabilities:
 The dependency-free core quickstart above remains the preferred setup when only vault operations
 are needed.
 
-## Code graph and conversion (optional)
+## Code graph and conversion
 
-Two opt-in capabilities, gated behind extras so the core install stays dependency-free:
+Install profiles. The core vault tools need no third-party parser at all; the code graph ships
+in the recommended `[graph]` install, and conversion is separate because its PDF/Office parsers
+pull a materially larger, native-extension dependency tree:
 
-| Extra | Adds |
+| Install | What you get |
 |---|---|
-| `[graph]` | Python (`ast`) + Ansible (PyYAML) code graph + the query tools |
-| `[graph-all]` | the above + a broad tree-sitter pass over ~30 languages (JS/TS/TSX, Go, Rust, Java, C#, C/C++, Ruby, PHP, bash, PowerShell, Terraform/HCL, Lua, Kotlin, Swift, Scala, R, Perl, Elixir, Dart, SQL, ...): definitions, `imports`, and within-file `calls` |
+| `[graph]` | the code graph and its query tools, over **every supported language**: a tree-sitter pass across ~30 grammars (JS/TS/TSX, Go, Rust, Java, C#, C/C++, Ruby, PHP, bash, PowerShell, Terraform/HCL, Lua, Kotlin, Swift, Scala, R, Perl, Elixir, Clojure, Dart, SQL, Groovy, Julia, Solidity, Haskell, OCaml) plus Python via the stdlib `ast` and a dedicated Ansible pass |
+| `[graph-slim]` | the same tools with **only** the two dependency-free extractors, Python and Ansible. Pick this only when the target really is Python/Ansible and the parser pack is not worth its size |
+| `[graph-all]` | alias of `[graph]`, kept so older pins keep resolving |
 | `[convert]` | attachment -> Markdown via MarkItDown; opt-in PDF and Office parsers add a materially larger dependency tree, including native-extension packages |
 
 **Build a graph** (AST-only - local, no network, no LLM) where the code lives:
@@ -213,9 +231,13 @@ names the rule would skip (e.g. `.github`, a first-party `vendor/`). Matching is
 directory basename, not path or glob. Same `exclude`/`include` on the `graph_build` tool.
 
 **Query it** over MCP with `graph_query` / `graph_neighbors` / `god_nodes` /
-`graph_shortest_path` / `graph_stats`. The graph captures functions/classes/imports/calls and -
-uniquely for Ansible - roles, tasks, handlers, `include_role`/`import_tasks`/`notify`, and
-`task -> filter plugin` edges. Graph files live in the vault's `.graph/` and are vault-contained
+`graph_shortest_path` / `graph_stats`. The graph captures functions, classes, imports and calls
+in every supported language.
+
+Ansible gets its own extractor rather than a grammar, because a playbook is YAML: a parser sees
+mappings and lists, not structure. That pass reads the *semantics* - roles, tasks, handlers,
+`include_role` / `import_tasks` / `notify`, and `task -> filter plugin` edges - so an Ansible
+tree becomes a call graph like any other repo. Graph files live in the vault's `.graph/` and are vault-contained
 (resolved + checked to stay inside the vault). Query tools are read-only; local `graph_build`
 deliberately creates or replaces the selected graph artifact. Vault note tools never depend on it.
 
@@ -280,10 +302,10 @@ Paste this into an agent at a repo's root to wire in local mode:
 Add the knowledge-gateway to this repo so agents can read/edit our vault over MCP with zero
 tokens:
 1. Create or merge `.mcp.json` at the repo root with an mcpServers."wiki" entry that runs:
-   uvx --refresh --from knowledge-gateway knowledge-gateway --local
+   uvx --refresh --from 'knowledge-gateway[graph]' knowledge-gateway --local
    (`--local` auto-detects the vault: ./wiki, a *-obsidian-vault dir, or a dir with .obsidian/.
    If detection is ambiguous, use `--vault ./<vault dir>` instead of `--local`.)
-2. Verify: `uvx --refresh --from knowledge-gateway \
+2. Verify: `uvx --refresh --from 'knowledge-gateway[graph]' \
    knowledge-gateway --help` resolves; then in the agent, call list_vaults and read one note.
 Branch + PR, no direct push, no AI attribution.
 ```
@@ -294,10 +316,10 @@ For the shared server, ask your gateway admin for a token, then run the `claude 
 ## Operate (servers)
 
 A server runs the latest release as a `uv tool`, with a daily job that reinstalls and
-restarts only when `stable` moved. Reference units are in `deploy/`:
+restarts only when the **published version** changes. Reference units are in `deploy/`:
 
 ```bash
-uv tool install knowledge-gateway
+uv tool install 'knowledge-gateway[graph,convert]'
 # the binary lives in the uv cache, so point config at the live files via env:
 #   KNOWLEDGE_GATEWAY_VAULTS= <dir>/vaults.yaml   KNOWLEDGE_GATEWAY_TOKENS= <dir>/tokens.yaml
 ```
@@ -305,20 +327,26 @@ uv tool install knowledge-gateway
 - `deploy/knowledge-gateway.service` - the service (systemd `--user`).
 - `deploy/knowledge-gateway-update.{service,timer}` + `deploy/auto-update.sh` - the daily auto-update.
 
-Update now instead of waiting for the timer: `uv tool install --reinstall --from
-knowledge-gateway`, then restart the
-service. Health: `curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8765/mcp/` -> `401`.
+Update now instead of waiting for the timer:
+`uv tool install --reinstall 'knowledge-gateway[graph,convert]'`, then restart the service. Health: `curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8765/mcp/` -> `401`.
 
 ## Release (maintainers)
 
-1. Start a release branch from current `main`.
-2. Move `Unreleased` changelog entries into the new version section and update the version in
+Releasing is a version bump, nothing else. `release.yml` watches for a **green `ci` run on
+`main`** whose `pyproject.toml` version has no tag yet, and then does the rest by itself:
+build, publish to PyPI (Trusted Publishing, no token), create the `vX.Y.Z` GitHub Release -
+which is what creates the tag - and move `stable` onto it.
+
+1. Move `Unreleased` changelog entries into the new version section and bump the version in
    `pyproject.toml` and `server.json`.
-3. Run `uv lock --check`, the skill validator, the full test suite and `uv build`; open a PR and
-   merge only after the Python 3.11-3.13 CI matrix is green.
-4. Tag the green `main` commit as `vX.Y.Z` and push the tag (the release workflow builds and publishes it).
-5. Verify the GitHub release and PyPI publication, then move `stable` to the same tag with
-   `--force-with-lease`.
+2. Run `uv lock` so the lockfile carries the new version, plus the skill validator and the test
+   suite. Open a PR; merge only after the Python 3.11-3.13 CI matrix is green.
+3. Watch the `release` run. Verify PyPI, the GitHub Release, and that `stable` moved.
+
+The tag is created **last**, so its presence means the release finished. A re-run heals a
+half-finished release rather than skipping it: PyPI publishing is `skip-existing`, an existing
+GitHub Release is left alone, and `stable` is fast-forwarded to the tag. Pushing a `vX.Y.Z` tag
+by hand still works and takes the same path, asserting the tag matches the packaged version.
 
 Consumers pick it up next session; servers within a day (or restart now).
 

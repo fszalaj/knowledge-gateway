@@ -287,7 +287,7 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
         @wtool
         def graph_build(vault: str, source: str, name: str = "default", languages: list[str] | None = None,
                         exclude: list[str] | None = None, include: list[str] | None = None) -> dict:
-            """Build a code/Ansible graph from a source tree and store it at .graph/<name>.json.
+            """Build a multi-language code graph from a source tree and store it at .graph/<name>.json.
             Hidden dirs and common build/vendor dirs are always skipped; `exclude` adds
             directory names to skip, `include` force-keeps names the rule would skip."""
             v = _vault(vault, write=True)

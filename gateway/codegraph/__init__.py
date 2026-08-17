@@ -1,4 +1,4 @@
-"""codegraph - build a queryable code/Ansible knowledge graph from a source tree.
+"""codegraph - build a queryable multi-language code knowledge graph from a source tree.
 
 Our own extractor (no third-party graph tool): stdlib `ast` for Python, PyYAML for
 Ansible, and an optional generic tree-sitter pass for more languages (JS/TS/Go/
