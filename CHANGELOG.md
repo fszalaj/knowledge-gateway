@@ -5,6 +5,21 @@ All notable changes to knowledge-gateway. Consumers track the moving **`stable`*
 next launch (no per-repo re-pin). Every release is also an immutable `vX.Y.Z` tag for
 pinning/audit.
 
+## Unreleased - 2026-08-17
+
+### Added
+- Nine reusable, provider-neutral agent skills for code-graph discovery, impact analysis,
+  wiki querying, curation, ingestion, linting, log folding, Obsidian Canvas, and
+  Obsidian-flavored Markdown.
+- A machine-readable skill manifest, dependency-free validator, and CI tests that verify
+  frontmatter, naming, inventory coverage, and documented use of the public MCP tool surface.
+- Repository-wide `AGENTS.md`, GitHub Copilot instructions, a cross-agent `.agents/skills`
+  symlink, and an end-to-end workflow harness documented in `docs/agent-skills.md`.
+
+### Docs
+- README now documents the bundled skills, recommended engineering loop, portability across
+  agent clients, required extras, validation commands, and preserved security boundaries.
+
 ## v0.8.3 - 2026-06-27
 
 ### Fixed
