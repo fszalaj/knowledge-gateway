@@ -20,10 +20,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("-o", "--out", required=True, help="output graph.json path")
     ap.add_argument("--languages", nargs="*", default=None,
                     help="restrict the tree-sitter pass to these languages (default: all available)")
+    ap.add_argument("--exclude", nargs="*", default=None,
+                    help="extra directory names to skip (hidden dirs and common "
+                         "build/vendor dirs are always skipped)")
+    ap.add_argument("--include", nargs="*", default=None,
+                    help="directory names to keep even if the prune rule would skip "
+                         "them (e.g. .github, vendor)")
     args = ap.parse_args(argv)
 
     from .build import build_graph  # imports networkx; needs the [graph] extra
-    data = build_graph(args.source, languages=args.languages)
+    data = build_graph(args.source, languages=args.languages,
+                       exclude=args.exclude, include=args.include)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")

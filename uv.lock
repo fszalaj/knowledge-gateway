@@ -875,7 +875,7 @@ wheels = [
 
 [[package]]
 name = "knowledge-gateway"
-version = "0.8.3"
+version = "0.8.4"
 source = { editable = "." }
 dependencies = [
     { name = "cryptography" },
@@ -889,6 +889,7 @@ dependencies = [
 all = [
     { name = "markitdown", extra = ["docx", "outlook", "pdf", "pptx", "xls", "xlsx"] },
     { name = "networkx" },
+    { name = "tree-sitter" },
     { name = "tree-sitter-language-pack" },
 ]
 convert = [
@@ -899,6 +900,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
+    { name = "tree-sitter" },
     { name = "tree-sitter-language-pack" },
 ]
 graph = [
@@ -906,6 +908,7 @@ graph = [
 ]
 graph-all = [
     { name = "networkx" },
+    { name = "tree-sitter" },
     { name = "tree-sitter-language-pack" },
 ]
 
@@ -925,6 +928,9 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
     { name = "pyyaml", specifier = ">=6,<7" },
     { name = "ruamel-yaml", specifier = ">=0.18,<0.20" },
+    { name = "tree-sitter", marker = "extra == 'all'", specifier = ">=0.25,<0.26" },
+    { name = "tree-sitter", marker = "extra == 'dev'", specifier = ">=0.25,<0.26" },
+    { name = "tree-sitter", marker = "extra == 'graph-all'", specifier = ">=0.25,<0.26" },
     { name = "tree-sitter-language-pack", marker = "extra == 'all'", specifier = ">=0.7" },
     { name = "tree-sitter-language-pack", marker = "extra == 'dev'", specifier = ">=0.7" },
     { name = "tree-sitter-language-pack", marker = "extra == 'graph-all'", specifier = ">=0.7" },

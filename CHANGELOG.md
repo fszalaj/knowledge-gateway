@@ -18,9 +18,14 @@ pinning/audit.
   instructions, and an end-to-end workflow documented in `docs/agent-skills.md`.
 
 ### Fixed
+- Code-graph builds now prune hidden directories and common build or vendored output before
+  extraction, while explicit `exclude` and `include` directory-name overrides cover generated
+  trees and intentional first-party code in otherwise pruned locations.
+- The graph extras keep `tree-sitter` below `0.26`, which segfaults on large TypeScript
+  repositories.
 - The `[convert]` extra now installs MarkItDown's PDF and Office format dependencies instead of
   failing at runtime with missing optional converters.
-- `server.json` version metadata now matches the current `0.8.3` package release.
+- `server.json` version metadata now matches the current `0.8.4` package version.
 
 ### Changed
 - `[convert]` and `[all]` now resolve the larger format-specific parser stack required for PDF and
