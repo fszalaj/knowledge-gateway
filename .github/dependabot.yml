@@ -18,3 +18,10 @@ updates:
       interval: weekly
     commit-message:
       prefix: deps
+    ignore:
+      # FastMCP 3.x requires mcp<2; remove when FastMCP supports mcp>=2.
+      - dependency-name: mcp
+        update-types: ["version-update:semver-major"]
+      # tree-sitter 0.26 segfaults on large TypeScript repos; reassess for 0.27.
+      - dependency-name: tree-sitter
+        versions: [">=0.26,<0.27"]
