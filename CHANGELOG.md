@@ -5,7 +5,7 @@ All notable changes to knowledge-gateway. Consumers track the moving **`stable`*
 next launch (no per-repo re-pin). Every release is also an immutable `vX.Y.Z` tag for
 pinning/audit.
 
-## Unreleased - 2026-08-17
+## v0.8.4 - 2026-08-17
 
 ### Added
 - Fourteen reusable, provider-neutral agent skills for gateway setup and operations, code-graph
