@@ -1,57 +1,106 @@
 # Agent skills and workflow harness
 
-knowledge-gateway ships reusable skills that turn individual MCP calls into repeatable engineering workflows. The skills are intentionally plain Markdown with YAML frontmatter so they remain inspectable, versioned, reviewable, and portable between agent clients.
+knowledge-gateway ships reusable skills that turn individual MCP calls into repeatable engineering workflows. Each skill is plain Markdown with YAML frontmatter, so it remains inspectable, versioned, reviewable and portable between agent clients.
 
 ## Why skills live in this repository
 
-The gateway defines the trusted tool surface. Keeping the operating playbooks beside that implementation prevents drift between documented tool names, security boundaries, and agent behavior. Every skill is validated against `.claude/skills/manifest.json` in the test suite.
+The gateway defines the trusted tool surface. Keeping the operating playbooks beside the implementation prevents drift between documented tool names, security boundaries and agent behavior. Every skill is registered in `.claude/skills/manifest.json` and validated in the test suite.
 
-The files are reference assets for agents and consuming repositories; they are not imported into the Python package at runtime.
+The skills are reference assets for agents and consuming repositories; they are not imported into the Python package at runtime and do not add privileges.
 
 ## Discovery and portability
 
-Claude Code discovers the canonical files under `.claude/skills/<name>/SKILL.md`. Codex, Gemini, GitHub Copilot, Cursor, and other clients can reuse the same content by copying it into their supported instruction directory or linking it from repository instructions. The procedures themselves use provider-neutral MCP tool names.
+The canonical files live under `.claude/skills/<name>/SKILL.md`. The repository also exposes `.agents/skills` as a symlink to the same directory, so one maintained copy works with multiple clients:
 
-Recommended consumer setup:
+- Claude Code: `.claude/skills`;
+- GitHub Copilot: `.claude/skills` or `.agents/skills`;
+- Codex and open Agent Skills clients: `.agents/skills`;
+- other clients: copy or reference the same `SKILL.md` files from their supported instruction location.
 
-1. Configure knowledge-gateway in `.mcp.json` or the client's MCP settings.
-2. Copy the required skill directories into the consumer repository, or reference this package from its agent instructions.
-3. Install the gateway extras required by the selected workflows:
-   - `[graph]` for Python and Ansible graphs;
-   - `[graph-all]` for the broad tree-sitter pass;
-   - `[convert]` for document-to-Markdown conversion;
-   - `[all]` for all optional capabilities.
-4. Run `python scripts/validate-skills.py` in this repository after editing a skill.
+On a checkout that cannot materialize Git symlinks, copy `.claude/skills` to `.agents/skills` instead.
+
+## Included workflows
+
+| Skill | Purpose | Required capability |
+|---|---|---|
+| `gateway-setup` | Configure local/shared access and verify tools | core; `[all]` recommended |
+| `code-graph` | Build, refresh and query repository structure | `[graph]` or `[graph-all]` |
+| `code-impact` | Estimate blast radius and validation scope | existing graph |
+| `knowledge-workflow` | Orchestrate discovery, implementation, review, gates and curation | core; graph recommended |
+| `wiki-query` | Restore decisions and project context with evidence | core vault |
+| `wiki-curate` | Patch and commit durable engineering knowledge | writable vault |
+| `wiki-ingest` | Convert attachments and structure source knowledge | `[convert]` for conversion |
+| `wiki-lint` | Audit frontmatter, links, tags, indexes and attachments | core vault |
+| `wiki-fold` | Compact old append-only logs without losing history | writable vault |
+| `canvas` | Build and update Obsidian Canvas maps | core vault |
+| `obsidian-markdown  | Author valid wikilinks, embeds, callouts and frontmatter | core vault |
+
+## Recommended local configuration
+
+Install all optional capabilities when the full skill pack is required:
+
+```jsonc
+{
+  "mcpServers": {
+    "wiki": {
+      "command": "uvx",
+      "args": [
+        "--refresh",
+        "--from",
+        "knowledge-gateway[all] @ git+https://github.com/fszalaj/knowledge-gateway@stable",
+        "knowledge-gateway",
+        "--local"
+      ]
+    }
+  }
+}
+```
+
+Use the dependency-free core command from the root README when only vault operations are needed. Pin an immutable release tag instead of `stable` for regulated or reproducible environments.
 
 ## End-to-end engineering loop
 
 ```mermaid
 flowchart LR
-    Q[Question or change] --> WQ[wiki-query]
+    S[gateway-setup] --> WQ[wiki-query]
     WQ --> CG[code-graph]
     CG --> CI[code-impact]
-    CI --> I[Implementation]
-    I --> V[Tests and quality gates]
-    V --> WC[wiki-curate]
+    CI --> I[bounded implementation]
+    I --> V[tests and quality gates]
+    V --> R[independent review]
+    R --> WC[wiki-curate]
     WC --> WL[wiki-lint]
-    WL --> PR[Pull request]
+    WL --> PR[pull request]
 ```
 
-- `wiki-query` restores prior context and decisions.
-- `code-graph` maps structural dependencies and hotspots.
-- `code-impact` turns that graph into a scoped change and validation plan.
-- Implementation remains governed by repository tests and security rules.
-- `wiki-curate` captures durable decisions and operating knowledge.
-- `wiki-lint` checks the knowledge change before merge.
+The `knowledge-workflow` skill packages this loop as a completion contract:
+
+- restore prior context before planning;
+- use graph evidence to scope structural impact;
+- write explicit acceptance, security, compatibility and rollback criteria;
+- keep implementation and final review in separate contexts;
+- require deterministic tests, lint, type, build and deployment verification;
+- record durable decisions and operating knowledge after the change.
+
+## Skills, agents, hooks and gates
+
+Use each layer for a different purpose:
+
+- **MCP tools** provide capabilities and controlled access to data.
+- **Skills** provide just-in-time procedures and output contracts.
+- **Specialist agents/subagents** isolate planning, implementation, security, review or documentation contexts.
+- **Hooks and CI gates** enforce deterministic rules such as secret protection, branch policy, formatting, tests and deployed-revision verification.
+
+A skill is guidance, not enforcement. Load-bearing constraints belong in code, hooks, CI and server-side authorization.
 
 ## Security boundaries preserved by the skills
 
 - `graph_build` is invoked only in local stdio mode. A shared server cannot scan arbitrary host paths.
-- Graph evidence is treated as partial static analysis, never proof of runtime behavior.
-- Vault reads and writes use gateway path containment and ACLs.
-- The curation skills prefer bounded patch operations over whole-file rewrites.
+- Graph evidence is partial static analysis, never proof of runtime behavior.
+- Vault reads and writes retain gateway path containment and ACL checks.
+- Curation prefers bounded patch operations over whole-file rewrites.
 - Commits are reviewed with `git_status` and remain vault-subdir scoped.
-- No skill asks an agent to expose a bearer token, bypass an ACL, follow a symlink outside a vault, or weaken error masking.
+- No skill asks an agent to expose a bearer token, bypass an ACL, follow a symlink outside a vault or weaken error masking.
 
 ## Maintaining the package
 
@@ -60,9 +109,9 @@ When adding or changing a skill:
 1. Use a lowercase hyphenated directory name.
 2. Add `SKILL.md` with frontmatter keys `name` and `description`.
 3. Make frontmatter `name` equal the directory name.
-4. List every gateway tool required by the workflow in `manifest.json`.
-5. Use only tool names in the validator's allowlist, which mirrors the public tool surface.
-6. Update `.claude/skills/README.md`, the root `README.md`, and `CHANGELOG.md` when the public inventory changes.
+4. List every required gateway tool in `manifest.json`.
+5. Use only tool names in the validator allowlist, which mirrors the public tool surface.
+6. Update `.claude/skills/README.md`, the root `README.md` and `CHANGELOG.md` when the public inventory changes.
 7. Run:
 
 ```bash

@@ -2,6 +2,12 @@
   "schema_version": 1,
   "skills": [
     {
+      "name": "gateway-setup",
+      "path": ".claude/skills/gateway-setup/SKILL.md",
+      "mode": "configuration",
+      "requires": ["list_vaults", "read_note", "git_status", "list_graphs"]
+    },
+    {
       "name": "code-graph",
       "path": ".claude/skills/code-graph/SKILL.md",
       "mode": "local-build/shared-query",
@@ -12,6 +18,12 @@
       "path": ".claude/skills/code-impact/SKILL.md",
       "mode": "read-mostly",
       "requires": ["graph_query", "graph_neighbors", "graph_shortest_path", "graph_stats"]
+    },
+    {
+      "name": "knowledge-workflow",
+      "path": ".claude/skills/knowledge-workflow/SKILL.md",
+      "mode": "orchestration",
+      "requires": ["list_vaults", "graph_stats", "graph_query", "graph_neighbors", "patch_note", "patch_frontmatter", "git_status"]
     },
     {
       "name": "wiki-query",
@@ -33,13 +45,13 @@
     },
     {
       "name": "wiki-lint",
-      "path": ".claude/skills/wiki-lint/SKILL.md",
+      "path": ".claude/skils/wiki-lint/SKILL.md",
       "mode": "read-mostly",
       "requires": ["list_notes", "query_notes", "list_tags", "backlinks", "search", "list_attachments", "git_status"]
     },
     {
       "name": "wiki-fold",
-      "path": ".claude/skills/wiki-fold/SKILL.md",
+      "path": ".claude/skils/wiki-fold/SKILL.md",
       "mode": "read-write",
       "requires": ["read_note", "write_note", "patch_note", "git_status", "git_commit"]
     },

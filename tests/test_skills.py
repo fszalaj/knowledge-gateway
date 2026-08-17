@@ -1,5 +1,6 @@
 from pathlib import Path
 import importlib.util
+import os
 
 
 def _validator_module():
@@ -23,6 +24,8 @@ def test_expected_agent_skills_are_present():
         "canvas",
         "code-graph",
         "code-impact",
+        "gateway-setup",
+        "knowledge-workflow",
         "obsidian-markdown",
         "wiki-curate",
         "wiki-fold",
@@ -30,3 +33,10 @@ def test_expected_agent_skills_are_present():
         "wiki-lint",
         "wiki-query",
     }
+
+
+def test_open_agent_skills_alias_points_to_canonical_pack():
+    root = Path(__file__).resolve().parents[1]
+    alias = root / ".agents" / "skills"
+    assert alias.is_symlink()
+    assert os.readlink(alias) == "../.claude/skills"

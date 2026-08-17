@@ -2,58 +2,156 @@
 
 <!-- mcp-name: io.github.fszalaj/knowledge-gateway -->
 
-A single MCP server that gives Claude Code, Codex, Cursor, Gemini, GitHub Copilot, and other agents a secure interface to:
+A single MCP server that gives agents (Claude Code, Codex, Cursor, Gemini, Copilot, Antigravity)
+three capabilities over one connection:
 
-- **Vaults** - read, search, edit, and commit git-backed Markdown or Obsidian knowledge bases.
-- **Code graphs** - build and query deterministic Python, Ansible, and multi-language dependency graphs.
-- **Conversion** - turn PDF, Office, image, HTML, CSV, and similar files into Markdown.
-- **Agent skills** - run repeatable workflows for code discovery, impact analysis, wiki curation, ingestion, linting, and Canvas authoring.
+- **Vault** - read, search, and **edit** a git-backed Markdown/Obsidian vault (no Obsidian GUI), git as the source of truth.
+- **Code graph** *(optional `[graph]` / `[graph-all]`)* - build and query a code/Ansible knowledge graph of a repo (functions, calls, roles, tasks, handlers, `task -> filter` edges); AST-only, local, no LLM.
+- **Convert** *(optional `[convert]`)* - turn PDF / Office / image / HTML files into Markdown.
 
-Obsidian does not need to be running. Git remains the source of truth.
+The vault layer exists because the Obsidian *Local REST API* plugin serves only the one vault open
+in a running desktop instance, writes without a lock (silent lost updates), needs a token in every
+client, and treats git as secondary. This gateway operates on the files directly, with git as the
+system of record - and adds the graph + convert tools the same way: one server, opt-in extras, no
+new servers to wire.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
     subgraph clients [Agents]
-        C1[Claude Code]
-        C2[Codex]
-        C3[Gemini]
-        C4[GitHub Copilot]
-        C5[Cursor]
+        A1[Claude Code]
+        A2[Codex]
+        A3[Gemini]
+        A4[Copilot - VS Code]
+        A5[Cursor]
+        A6[Antigravity]
     end
-    C1 --- M((MCP))
-    C2 --- M
-    C3 --- M
-    C4 --- M
-    C5 --- M
-    M -->|stdio, no token| L[Local gateway]
+    A1 --- M(( MCP ))
+    A2 --- M
+    A3 --- M
+    A4 --- M
+    A5 --- M
+    A6 --- M
+    M -->|stdio, per repo, no auth| L[Local gateway]
     M -->|HTTP + bearer + ACL| S[Shared gateway]
-    L --> V[/Git-backed vault/]
+    L --> V[/Vault: Markdown files/]
     S --> V
-    V <-->|atomic writes + scoped commits| G[(git)]
-    L --> CG[(.graph/*.json)]
-    S --> CG
+    V <-->|atomic write + scoped commit| G[(git)]
 ```
 
-Local and shared modes use the same tool implementation and path guards. They differ in transport, authentication, vault loading, and error masking.
+Both modes run the **same** tool implementation over the **same** path guards; they differ in
+transport, authentication/ACL, vault loading, and error masking.
 
-## Run modes
+## Two ways to run
 
-| | Local mode | Shared server |
+| | **Local mode** (per repo) | **Shared server** (team) |
 |---|---|---|
-| Best for | one repository and its agents | a team service with many vaults |
-| Transport | stdio subprocess | HTTP behind Tailscale/HTTPS |
-| Credentials | none | per-user bearer tokens |
-| Vault access | local filesystem identity | per-token vault ACL |
-| Graph build | allowed | blocked |
-| Obsidian required | no | no |
+| Use when | a repo wants its own vault for its agents | many people/vaults behind one always-on endpoint |
+| Transport | stdio subprocess (launched by `.mcp.json`) | HTTP (put behind Tailscale/HTTPS) |
+| Secrets / tokens | **none** - nothing to generate | per-user bearer tokens (admin-generated) |
+| Trust boundary | local filesystem access you already have | tailnet + HTTPS + per-vault ACL |
+| Obsidian needed | no | no |
 
-Most repositories should use local mode.
+Most repos want **Local mode**. The shared server is only for a central, always-on team gateway.
 
-## Quickstart - local mode
+## Distribution - the `stable` branch ("update once")
 
-Add `.mcp.json` at the consumer repository root:
+The gateway ships from one moving branch, so a release reaches every consumer and server
+without re-pinning anything by hand.
+
+```mermaid
+flowchart LR
+    PR[merge PR to main] --> TAG[tag vX.Y.Z]
+    TAG --> MV[move stable -> vX.Y.Z]
+    MV --> C["Consumers<br/>uvx --refresh @stable<br/>(updates next session)"]
+    MV --> S["Servers<br/>daily uv tool reinstall<br/>(restart if stable moved)"]
+```
+
+- **Consumers** pin `@stable` with `uvx --refresh` -> the ref is re-fetched on every launch, so
+  a new release auto-propagates the next time an agent starts. No per-repo re-pin.
+- **Servers** (long-running) run a pinned `uv tool install @stable` plus a daily job that
+  reinstalls + restarts only when `stable` actually moves.
+- Every release is **also** an immutable `vX.Y.Z` tag - pin a tag instead of `stable` when you
+  need a frozen, auditable version.
+
+> A moving *tag* does not work (uvx caches the resolved commit); a *branch* + `--refresh` does.
+
+## Quickstart - local mode (zero secrets)
+
+Add this to the repo's `.mcp.json` at the repo root:
+
+```jsonc
+{
+  "mcpServers": {
+    "wiki": {
+      "command": "uvx",
+      "args": ["--refresh", "--from", "git+https://github.com/fszalaj/knowledge-gateway@stable",
+               "knowledge-gateway", "--local"]
+    }
+  }
+}
+```
+
+- `--local` auto-detects the vault in the cwd, in order: the cwd itself if it has `.obsidian/`,
+  then `./wiki`, then a single `*-obsidian-vault/`, then a single child dir with `.obsidian/`
+  (ambiguous matches error). Pass `--vault ./<dir>` to be explicit.
+- `--refresh` re-fetches `@stable` each launch, so releases auto-apply (adds ~1-2s to start).
+- Commits are scoped to the vault's git subdir and attributed to your own
+  `git config user.name/email`. No token: the trust boundary is local filesystem access.
+
+Open the repo in your agent, approve the `wiki` server once, done.
+
+## Tools
+
+| Tool | |
+|---|---|
+| `list_vaults` | vaults reachable here |
+| `list_notes` | Markdown paths in a vault |
+| `read_note` | raw note content |
+| `list_attachments` / `read_attachment` | list / read binary attachments (image -> inline Image, else File) |
+| `list_canvases` / `read_canvas  / `write_canvas` | list / read / write Obsidian Canvas (nodes, groups, colors) |
+| `search` | ripgrep literal/regex full-text |
+| `backlinks` | notes that `[[wikilink]]` to a note |
+| `list_tags` | inline `#tags` with counts |
+| `query_notes` | find notes by frontmatter `type` / `tag` (headless Dataview-lite) |
+| `write_note` | atomic write (+ optional commit) |
+| `patch_note` | insert after a heading or at top/bottom, no full rewrite (+ commit) |
+| `patch_frontmatter` | update YAML frontmatter keys, body intact (+ commit) |
+| `delete_note` | delete a note (+ optional commit) |
+| `rename_note` | rename/move + rewrite inbound flat `[[wikilinks]]` when the name changes (+ optional commit) |
+| `git_status` / `git_commit` | pending changes / commit (subdir-scoped, attributed) |
+| `list_graphs` / `graph_query` / `graph_neighbors` / `god_nodes` / `graph_shortest_path` / `graph_stats` | query a built code graph (optional `[graph]`) |
+| `graph_build` | build a code/Ansible graph from a source tree into `.graph/<name>.json` (local mode only) |
+| `convert_to_markdown` | convert a file (PDF/Office/image/HTML/...) in the vault to Markdown (optional `[convert]`) |
+
+Edits are atomic (temp file + `rename`). Every path goes through `safe_note_path`, which blocks
+traversal, symlink escape, hidden/dotfiles, non-`.md` targets, and `.git`/`.obsidian` - a caller
+can never read or write outside the vault's notes.
+
+## Agent skills
+
+The repository includes a validated, provider-neutral Agent Skills pack under
+`.claude/skills/`. The `.agents/skills` symlink points to the same canonical files for Codex and
+other clients that use the open Agent Skills convention.
+
+The pack covers:
+
+- `gateway-setup` for MCP configuration and capability verification;
+- `code-graph` and `code-impact` for architecture discovery and blast-radius analysis;
+- `wiki-query`, `wiki-curate`, `wiki-ingest`, `wiki-lint`, and `wiki-fold` for durable knowledge;
+- `canvas` and `obsidian-markdown` for Obsidian-native authoring;
+- `knowledge-workflow` for the full discovery -> specification -> implementation -> deterministic
+  gates -> independent review -> curation loop.
+
+Skills add repeatable procedures, not privileges. Server-side ACLs, path guards, hooks and CI remain
+the enforcement layer. The machine-readable inventory is `.claude/skills/manifest.json`; CI validates
+that every skill is registered and references only real gateway tools.
+
+See [`docs/agent-skills.md`](docs/agent-skills.md) for the compatibility matrix, required extras,
+workflow harness, maintenance rules and security boundaries.
+
+For the complete pack, run local mode with all optional capabilities:
 
 ```jsonc
 {
@@ -63,7 +161,7 @@ Add `.mcp.json` at the consumer repository root:
       "args": [
         "--refresh",
         "--from",
-        "git+https://github.com/fszalaj/knowledge-gateway@stable",
+        "knowledge-gateway[all] @ git+https://github.com/fszalaj/knowledge-gateway@stable",
         "knowledge-gateway",
         "--local"
       ]
@@ -72,193 +170,135 @@ Add `.mcp.json` at the consumer repository root:
 }
 ```
 
-`--local` auto-detects, in order:
+The dependency-free core quickstart above remains the preferred setup when only vault operations
+are needed.
 
-1. the current directory when it contains `.obsidian/`;
-2. `./wiki`;
-3. a single `*-obsidian-vault/` directory;
-4. a single child directory containing `.obsidian/`.
+## Code graph and conversion (optional)
 
-Ambiguous matches fail explicitly. Use `--vault ./path` when detection should not be automatic.
-
-`--refresh` re-fetches the moving `stable` branch at agent startup. Pin an immutable `vX.Y.Z` tag when a fixed, auditable version is required.
-
-## MCP tools
-
-### Vault and Git
-
-| Tool | Purpose |
-|---|---|
-| `list_vaults` | List vaults available to the current identity. |
-| `list_notes`, `read_note` | List and read Markdown pages. |
-| `list_attachments`, `read_attachment` | List and read bounded binary attachments. |
-| `search` | Ripgrep literal or regular-expression full-text search. |
-| `backlinks` | Find pages containing Obsidian `[[wikilinks]]` to a note. |
-| `list_tags`, `query_notes` | Inspect tags and frontmatter type/tag metadata. |
-| `write_note` | Atomically create or replace a note. |
-| `patch_note` | Insert content at top, bottom, or under a heading without full rewrite. |
-| `patch_frontmatter` | Update YAML frontmatter while preserving the body. |
-| `rename_note` | Rename or move a note and update inbound flat wikilinks. |
-| `delete_note` | Delete a note. |
-| `git_status`, `git_commit` | Review and commit vault-subdir-scoped changes. |
-
-### Canvas
-
-| Tool | Purpose |
-|---|---|
-| `list_canvases` | List Obsidian Canvas files. |
-| `read_canvas` | Read a JSON Canvas object. |
-| `write_canvas` | Atomically write the complete Canvas object. |
-
-### Code graph
-
-| Tool | Purpose |
-|---|---|
-| `list_graphs` | List graphs under the vault's `.graph/` directory. |
-| `graph_build` | Build a graph from a source tree. Local mode only. |
-| `graph_stats` | Inspect graph metadata and extraction coverage. |
-| `graph_query` | Resolve symbols, modules, roles, tasks, handlers, and resources. |
-| `graph_neighbors` | Traverse incoming, outgoing, or bidirectional relations. |
-| `god_nodes` | Find highly connected nodes and architectural hotspots. |
-| `graph_shortest_path` | Explain how two known nodes connect. |
-
-### Conversion
-
-`convert_to_markdown` converts supported vault files to Markdown when the `[convert]` extra is installed.
-
-## Bundled agent skills
-
-The repository ships nine inspectable, versioned workflow skills:
-
-| Skill | Workflow |
-|---|---|
-| `code-graph` | Build, refresh, and interrogate a repository graph. |
-| `code-impact` | Estimate blast radius and required validation before a change. |
-| `wiki-query` | Answer from vault evidence rather than guess. |
-| `wiki-curate` | Record durable decisions, modules, procedures, and operational context. |
-| `wiki-ingest` | Convert source material into structured, cross-linked knowledge. |
-| `wiki-lint` | Check embeds, frontmatter, taxonomy, catalog drift, and pending changes. |
-| `wiki-fold` | Compact old operation-log entries without losing history. |
-| `canvas` | Create and edit readable Obsidian Canvas maps. |
-| `obsidian-markdown` | Author correct wikilinks, embeds, callouts, and frontmatter. |
-
-Canonical files live under `.claude/skills/<name>/SKILL.md`. `.agents/skills` is a symlink to the same package for cross-agent reuse. The procedures use provider-neutral MCP tool names, so Codex, Gemini, Copilot, Cursor, and other clients can copy or reference them from their supported instruction location.
-
-The machine-readable inventory is `.claude/skills/manifest.json`. Validate it with:
-
-```bash
-python scripts/validate-skills.py
-pytest -q tests/test_skills.py
-```
-
-The validator checks frontmatter, naming, manifest coverage, documented tool dependencies, and use of the public gateway tool surface. See [docs/agent-skills.md](docs/agent-skills.md) for the full workflow harness and security model.
-
-### Recommended engineering loop
-
-```mermaid
-flowchart LR
-    Q[Question or change] --> WQ[wiki-query]
-    WQ --> CG[code-graph]
-    CG --> CI[code-impact]
-    CI --> I[Implementation]
-    I --> V[Tests and quality gates]
-    V --> WC[wiki-curate]
-    WC --> WL[wiki-lint]
-    WL --> PR[Pull request]
-```
-
-The skills are operating playbooks. They do not bypass repository tests, review, ACLs, or the gateway's path guards.
-
-## Optional capabilities
-
-The core vault package stays small. Install only the extras required by a deployment:
+Two opt-in capabilities, gated behind extras so the core install stays dependency-free:
 
 | Extra | Adds |
 |---|---|
-| `[graph]` | NetworkX graph plus Python `ast` and Ansible extraction. |
-| `[graph-all]` | The above plus tree-sitter extraction for roughly 30 languages, including JS/TS/TSX, Go, Rust, Java, C#, C/C++, Ruby, PHP, shell, PowerShell, Terraform/HCL, Kotlin, Swift, Scala, SQL, and others. |
-| `[convert]` | File-to-Markdown conversion through MarkItDown. |
-| `[all]` | All optional capabilities. |
+| `[graph]` | Python (`ast`) + Ansible (PyYAML) code graph + the query tools |
+| `[graph-all]` | the above + a broad tree-sitter pass over ~30 languages (JS/TS/TSX, Go, Rust, Java, C#, C/C++, Ruby, PHP, bash, PowerShell, Terraform/HCL, Lua, Kotlin, Swift, Scala, R, Perl, Elixir, Dart, SQL, ...): definitions, `imports`, and within-file `calls` |
+| `[convert]` | attachment -> Markdown via markitdown |
 
-A standalone graph can also be built locally:
+**Build a graph** (AST-only - local, no network, no LLM) where the code lives:
 
 ```bash
-knowledge-gateway-graph /path/to/code-repo -o /path/to/vault/.graph/repo.json
+knowledge-gateway-graph /path/to/code-repo -o /path/to/vault/.graph/myrepo.json
+# in a local-mode session the graph_build tool does the same, writing .graph/<name>.json
 ```
 
-The graph is deterministic static analysis with no LLM call. It captures definitions, imports, within-file calls, communities, source locations, and Ansible-specific relations such as roles, tasks, handlers, includes, notifications, dependencies, and task-to-filter edges.
-
-Graph evidence is deliberately conservative: it does not prove runtime execution, reflection, dynamic imports, dependency injection, or generated configuration. The bundled skills require source and test verification before conclusions.
+**Query it** over MCP with `graph_query` / `graph_neighbors` / `god_nodes` /
+`graph_shortest_path` / `graph_stats`. The graph captures functions/classes/imports/calls and -
+uniquely for Ansible - roles, tasks, handlers, `include_role`/`import_tasks`/`notify`, and
+`task -> filter plugin` edges. Graph files live in the vault's `.graph/`, are vault-contained
+(resolved + checked to stay inside the vault), and are read-only to the gateway - the vault tools
+never depend on them.
 
 ## Shared server mode
 
-Copy the examples and map vaults to repositories:
+Run this only for a central, always-on gateway reachable over the network.
+
+**1. Map vaults** - `cp vaults.example.yaml vaults.yaml`, then set `name -> path / repo_root /
+subdir`. `repo_root` + `subdir` pathspec-scope commits to a vault that lives inside a larger repo.
+
+**2. Mint a token per user** (the admin does this):
 
 ```bash
-cp vaults.example.yaml vaults.yaml
 cp tokens.example.yaml tokens.yaml
-chmod 0600 tokens.yaml
+openssl rand -hex 32          # once PER user -> the key
+chmod 0600 tokens.yaml        # refused at load if group/world-readable
 ```
-
-Generate a separate token per user:
-
-```bash
-openssl rand -hex 32
-```
-
-Example token entry:
 
 ```yaml
 tokens:
-  "8f3c...hex...":
-    sub: alice
-    vaults: [teamwiki]
-    write: true
+  "8f3c…hex…":
+    sub: alice                # identity recorded on that user's commits
+    vaults: [teamwiki]        # the ONLY vaults this token may see/touch
+    write: true               # false = read-only
 ```
 
-Run `uv run knowledge-gateway`. The default HTTP endpoint is `127.0.0.1:8765/mcp/`. Place it behind a trusted tailnet and HTTPS; do not expose it as a public bearer-token service.
+A token sees only the vaults in its `vaults` list; anything else returns an opaque
+`vault_forbidden`. `vaults.yaml` + `tokens.yaml` are gitignored.
+
+**3. Run** - `uv run knowledge-gateway` (127.0.0.1:8765, path `/mcp/`). For a team box, run it as
+a service behind Tailscale Serve - see `deploy/` and *Operate* below.
+
+**4. Connect** - the admin shares the token over a password manager (not chat):
+
+```bash
+claude mcp add --transport http --scope project teamwiki \
+  https://YOUR-HOST.<tailnet>.ts.net/mcp/ --header "Authorization: Bearer $GW_TOKEN"
+```
 
 ## Security model
 
-- Local stdio mode has no token surface; its trust boundary is the user's existing filesystem access.
-- Shared mode combines tailnet/HTTPS, a per-user bearer identity, per-vault ACLs, and optional read-only access.
-- Every note path is resolved and contained inside the selected vault. Traversal, symlink escape, hidden files, `.git`, `.obsidian`, invalid extensions, and oversized reads are rejected.
-- Mutating operations are atomic and serialized by a per-repository lock.
-- Git commits are pathspec-scoped to the vault subdirectory and attributed to the requesting identity.
-- Shared HTTP mode masks unexpected filesystem and Git errors. Only deliberate client-facing gateway errors are returned.
-- Graph files remain contained under `.graph/`. `graph_build` is local-only so a shared service cannot scan arbitrary host paths.
-- Optional dependencies are lazily imported; unavailable capabilities fail cleanly without breaking the core vault tools.
+- **No secrets in the repo.** `vaults.yaml` / `tokens.yaml` are gitignored; only
+  `*.example.yaml` ship. `tokens.yaml` is refused at load if group/world-readable.
+- **Local mode has no credential surface** - a local stdio subprocess; the trust boundary is
+  filesystem access the user already has.
+- **Server mode is defense in depth, not a public endpoint** - tailnet ACL + HTTPS + per-user
+  `StaticTokenVerifier` bearer token + per-vault ACL. The bearer layer is a shared secret for
+  use **behind a trusted tailnet**; do not expose the server publicly.
+- **Path guards on all note I/O** via `safe_note_path` (traversal, symlink, hidden/dotfiles
+  incl. `.env`, non-`.md`, `.git`/`.obsidian`). Search/backlinks/tags are bounded to `*.md`.
+- **Server-mode error masking** - the HTTP server runs `mask_error_details=True`: only the
+  gateway's own expected failures surface as `ToolError`; unexpected OS/git errors are hidden.
+  Local mode keeps details visible.
+- **Commits are attributed** to the requesting user (server) or the local git identity (local),
+  and pathspec-scoped to the vault subdir.
 
-## Distribution and operations
+## Set it up with an AI
 
-Consumers normally track the moving `stable` branch with `uvx --refresh`. Every release is also tagged with immutable `vX.Y.Z`.
+Paste this into an agent at a repo's root to wire in local mode:
 
-Long-running servers can install the `stable` branch as a `uv tool` and use the reference systemd units under `deploy/`:
-
-- `knowledge-gateway.service`
-- `knowledge-gateway-update.service`
-- `knowledge-gateway-update.timer`
-- `auto-update.sh`
-
-A local health request to the protected MCP endpoint should return `401` without a bearer token.
-
-## Development
-
-```bash
-uv lock --check
-uv venv
-uv pip install -e ".[dev]"
-uv run python scripts/validate-skills.py
-uv run pytest -q --cov=gateway --cov-report=term-missing
+```
+Add the knowledge-gateway to this repo so agents can read/edit our vault over MCP with zero
+tokens:
+1. Create or merge `.mcp.json` at the repo root with an mcpServers."wiki" entry that runs:
+   uvx --refresh --from git+https://github.com/fszalaj/knowledge-gateway@stable knowledge-gateway --local
+   (`--local` auto-detects the vault: ./wiki, a *-obsidian-vault dir, or a dir with .obsidian/.
+   If detection is ambiguous, use `--vault ./<vault dir>` instead of `--local`.)
+2. Verify: `uvx --refresh --from git+https://github.com/fszalaj/knowledge-gateway@stable \
+   knowledge-gateway --help` resolves; then in the agent, call list_vaults and read one note.
+Branch + PR, no direct push, no AI attribution.
 ```
 
-Repository-wide agent rules are in `AGENTS.md`; GitHub Copilot receives the same boundaries through `.github/copilot-instructions.md`.
+For the shared server, ask your gateway admin for a token, then run the `claude mcp add …` from
+*Connect* above.
 
-## Release
+## Operate (servers)
 
-1. Merge a green pull request to `main`.
-2. Bump the package version and `CHANGELOG.md`.
-3. Tag and push `vX.Y.Z`.
-4. Move `stable` to the release with `--force-with-lease`.
+A server runs the `@stable` release as a `uv toool`, with a daily job that reinstalls and
+restarts only when `stable` moved. Reference units are in `deploy/`:
 
-Consumers update on their next refreshed session; managed servers update through the deployment timer or an explicit reinstall and restart.
+```bash
+uv tool install --from git+https://github.com/fszalaj/knowledge-gateway@stable knowledge-gateway
+# the binary lives in the uv cache, so point config at the live files via env:
+#   KNOWLEDGE_GATEWAY_VAULTS= <dir>/vaults.yaml   KNOWLEDGE_GATEWAY_TOKENS= <dir>/tokens.yaml
+```
+
+- `deploy/knowledge-gateway.service` - the service (systemd `--user`).
+- `deploy/knowledge-gateway-update.{service,timer}` + `deploy/auto-update.sh` - the daily auto-update.
+
+Update now instead of waiting for the timer: `uv tool install --reinstall --from
+git+https://github.com/fszalaj/knowledge-gateway@stable knowledge-gateway`, then restart the
+service. Health: `curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8765/mcp/` -> `401`.
+
+## Release (maintainers)
+
+1. PR -> merge to `main` (CI: `uv lock --check`, pytest matrix).
+2. Bump `pyproject.toml` version + `CHANGELOG.md`.
+3. Tag `vX.Y.Z` and push the tag (the release workflow builds it).
+4. Move `stable`: `git branch -f stable vX.Y.Z && git push --force-with-lease origin stable`.
+
+Consumers pick it up next session; servers within a day (or restart now).
+
+## Develop
+
+```bash
+uv venv && uv pip install -e ".[dev]"
+uv run pytest                              # ACL + path guards + edit/frontmatter + detect + masking
+```

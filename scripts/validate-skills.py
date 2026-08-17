@@ -6,6 +6,7 @@ Dependency-free by design so it can run before the project environment is instal
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -108,6 +109,12 @@ def validate(root: Path = ROOT) -> list[str]:
     discovered = set(skills_root.glob("*/SKILL.md"))
     for path in sorted(discovered - manifest_paths):
         errors.append(f"unregistered skill: {path.relative_to(root)}")
+
+    alias = root / ".agents" / "skills"
+    if not alias.is_symlink():
+        errors.append(".agents/skills must be a symlink to the canonical skill pack")
+    elif os.readlink(alias) != "../.claude/skills":
+        errors.append(".agents/skills must point to ../.claude/skills")
     return errors
 
 
