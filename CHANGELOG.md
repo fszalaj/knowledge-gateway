@@ -8,13 +8,23 @@ pinning/audit.
 ## Unreleased - 2026-08-17
 
 ### Added
-- Nine reusable, provider-neutral agent skills for code-graph discovery, impact analysis,
-  wiki querying, curation, ingestion, linting, log folding, Obsidian Canvas, and
-  Obsidian-flavored Markdown.
+- Fourteen reusable, provider-neutral agent skills for gateway setup and operations, code-graph
+  build/exploration and impact analysis, document conversion, durable wiki workflows,
+  Obsidian-native authoring, and Cordis composability review.
 - A machine-readable skill manifest, dependency-free validator, and CI tests that verify
   frontmatter, naming, inventory coverage, and documented use of the public MCP tool surface.
-- Repository-wide `AGENTS.md`, GitHub Copilot instructions, a cross-agent `.agents/skills`
-  symlink, and an end-to-end workflow harness documented in `docs/agent-skills.md`.
+- Repository-wide `AGENTS.md`, GitHub Copilot instructions, a canonical top-level `skills/`
+  directory, `.agents/skills` and `.claude/skills` discovery symlinks, sourced portable copying
+  instructions, and an end-to-end workflow documented in `docs/agent-skills.md`.
+
+### Fixed
+- The `[convert]` extra now installs MarkItDown's PDF and Office format dependencies instead of
+  failing at runtime with missing optional converters.
+- `server.json` version metadata now matches the current `0.8.3` package release.
+
+### Changed
+- `[convert]` and `[all]` now resolve the larger format-specific parser stack required for PDF and
+  Office conversion; core and graph-only installs remain unchanged.
 
 ### Docs
 - README now documents the bundled skills, recommended engineering loop, portability across

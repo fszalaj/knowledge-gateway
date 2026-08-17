@@ -16,6 +16,7 @@ Use the repository's deterministic consistency script when one exists, then supp
 ## Gateway health pass
 
 - `list_notes` - inspect unexpected paths and catalog scope.
+- `read_note` - inspect raw frontmatter and embed syntax on pages flagged by the deterministic check or queries.
 - `query_notes` - find pages by type/tag and identify missing or inconsistent metadata.
 - `list_tags` - detect taxonomy drift and near-duplicate tags.
 - `backlinks` - inspect orphaned canonical pages and risky renames.
@@ -32,6 +33,7 @@ Use the repository's deterministic consistency script when one exists, then supp
 ## Rules
 
 - Do not treat every red `[[wikilink]]` as an error; some vaults intentionally use future-page links.
+- Resolve embed targets against `list_notes` and `list_attachments`. If no deterministic checker exists, report the inspected scope instead of claiming complete coverage.
 - Do not refresh another contributor's personal context page.
 - Do not delete orphaned files automatically when provenance or archive value is unclear.
 - Finish with the exact commands run, counts by severity, files changed, and residual warnings.
