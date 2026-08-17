@@ -19,7 +19,9 @@ classifiers = [
 # break the pinned gateway on a fresh resolve. Bound to the current major; widen
 # deliberately after testing. The committed uv.lock pins the exact transitive tree.
 dependencies = [
+    "cryptography>=50",
     "fastmcp>=3,<4",
+    "mcp>=1.28.1,<2",
     "pyyaml>=6,<7",
     "ruamel.yaml>=0.18,<0.20",
 ]
