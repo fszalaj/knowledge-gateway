@@ -57,13 +57,20 @@ jobs:
             fi
           else
             version="$packaged"
-            # Skip only when the tag exists AND stable already points here. Keying on the
-            # tag alone would turn a half-finished release - published, but stable not
-            # moved - into a permanently green no-op that consumers never receive.
-            if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null 2>&1 \
-               && [ "$(git rev-parse HEAD)" = "$(git ls-remote origin stable | cut -f1)" ]; then
-              echo "v$version is released and stable points at it - nothing to do"
-              echo "release=false" >> "$GITHUB_OUTPUT"; exit 0
+            # Nothing to do only when the tag exists AND stable already points at that tag.
+            # Keying on the tag alone would turn a half-finished release - published, but
+            # stable not moved - into a permanently green no-op consumers never receive;
+            # keying on HEAD instead would drag stable past the tag on every later commit.
+            if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null 2>&1; then
+              tagged=$(git rev-list -n1 "v$version")
+              if [ "$tagged" = "$(git ls-remote origin stable | cut -f1)" ]; then
+                echo "v$version is released and stable points at it - nothing to do"
+                echo "release=false" >> "$GITHUB_OUTPUT"; exit 0
+              fi
+              # Healing a half-finished release: operate on the tagged tree, not on main,
+              # so stable lands on the commit that was actually released.
+              echo "v$version is tagged but stable is elsewhere - finishing that release"
+              git checkout --detach "v$version"
             fi
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"

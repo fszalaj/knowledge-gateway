@@ -5,6 +5,17 @@ All notable changes to knowledge-gateway. Consumers track the moving **`stable`*
 next launch (no per-repo re-pin). Every release is also an immutable `vX.Y.Z` tag for
 pinning/audit.
 
+## v0.8.7 - 2026-08-18
+
+### Fixed
+- `release.yml` now anchors `stable` to the released tag rather than to `main`. The v0.8.6
+  run moved `stable` two commits past its own tag, because the "already released" check
+  compared `stable` against `HEAD` instead of against the tag. A half-finished release is
+  still healed on the next green `ci`, but by finishing that tag's release rather than by
+  dragging `stable` forward.
+- The automerge workflow declares `checks: read` and `statuses: read`. Naming any permission
+  scope sets every unnamed one to none, so the verdict queries returned 403.
+
 ## v0.8.6 - 2026-08-17
 
 ### Changed

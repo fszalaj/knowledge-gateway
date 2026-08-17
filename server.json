@@ -6,12 +6,12 @@
     "url": "https://github.com/fszalaj/knowledge-gateway",
     "source": "github"
   },
-  "version": "0.8.6",
+  "version": "0.8.7",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "knowledge-gateway",
-      "version": "0.8.6",
+      "version": "0.8.7",
       "transport": { "type": "stdio" },
       "runtimeHint": "uvx"
     }
