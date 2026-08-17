@@ -54,11 +54,13 @@ jobs:
             if [ "$green" -eq 0 ] || [ "$bad" -ne 0 ]; then
               echo "#$pr: $green green, $bad not green - not merging"; continue
             fi
-            # A conflicted or still-computing PR is an expected state, not an error: skip it
-            # quietly so the hourly sweep does not go red until dependabot rebases.
-            mergeable=$(gh pr view "$pr" --repo "$REPO" --json mergeable --jq '.mergeable')
-            if [ "$mergeable" != MERGEABLE ]; then
-              echo "#$pr: mergeable=$mergeable - leaving it to dependabot"; continue
+            # Anything other than a clean, conflict-free PR is an expected state, not an
+            # error - a conflict dependabot will rebase, or branch protection still wanting
+            # a review. Skip quietly so the hourly sweep does not go red forever.
+            read -r mergeable state <<<"$(gh pr view "$pr" --repo "$REPO" \
+              --json mergeable,mergeStateStatus --jq '"\(.mergeable) \(.mergeStateStatus)"')"
+            if [ "$mergeable" != MERGEABLE ] || [ "$state" != CLEAN ]; then
+              echo "#$pr: mergeable=$mergeable state=$state - not merging yet"; continue
             fi
             echo "#$pr: green - merging"
             # One unmergeable PR must not stop the sweep; the step still ends red.
