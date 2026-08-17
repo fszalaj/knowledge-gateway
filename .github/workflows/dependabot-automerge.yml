@@ -17,6 +17,10 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  # Naming any scope sets every unnamed one to none: without these two the verdict
+  # queries come back 403 "Resource not accessible by integration".
+  checks: read
+  statuses: read
 
 concurrency:
   # Never cancel: a cancel between the merge call and the branch deletion would strand the
