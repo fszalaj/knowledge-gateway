@@ -20,7 +20,7 @@ def _iter_files(root: Path, exclude: frozenset[str], include: frozenset[str]):
         # one prune rule shared with the Ansible pass: hidden dirs (.next, .venv, .git...),
         # build/vendor output, plus caller-supplied names. Do not descend.
         dirnames[:] = sorted(d for d in dirnames if not extract_ansible.skip_dir(d, exclude, include))  # sorted: deterministic output
-        for fn in filenames:
+        for fn in sorted(filenames):
             yield Path(dirpath) / fn
 
 

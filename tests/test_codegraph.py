@@ -9,6 +9,7 @@ pytest.importorskip("networkx")
 
 from gateway.codegraph import build_graph
 from gateway.codegraph import extract_ansible, extract_python
+from gateway.codegraph.build import _iter_files
 
 
 def _write(p, text):
@@ -95,6 +96,15 @@ def test_build_graph_roundtrip(tmp_path):
     # communities baked onto nodes
     assert all("id" in n for n in data["nodes"])
     assert len(s) > 100
+
+
+def test_file_walk_is_deterministic(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "gateway.codegraph.build.os.walk",
+        lambda _root: [(str(tmp_path), ["z-dir", "a-dir"], ["z.py", "a.py"])],
+    )
+    paths = _iter_files(tmp_path, frozenset(), frozenset())
+    assert [path.name for path in paths] == ["a.py", "z.py"]
 
 
 def test_build_graph_prunes_junk_dirs(tmp_path):

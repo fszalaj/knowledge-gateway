@@ -28,6 +28,9 @@ pinning/audit.
 - `server.json` version metadata now matches the current `0.8.4` package version.
 
 ### Changed
+- Hidden directories, including `.github`, are excluded from graphs by default and can be
+  restored explicitly with `include`; the public `PRUNE` set now lists only non-hidden
+  build and vendor directory names because `skip_dir` handles hidden names uniformly.
 - `[convert]` and `[all]` now resolve the larger format-specific parser stack required for PDF and
   Office conversion; core and graph-only installs remain unchanged.
 
