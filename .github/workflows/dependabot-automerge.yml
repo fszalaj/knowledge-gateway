@@ -33,6 +33,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
+      # A self-hosted runner caches its PATH when the service starts, so a tool installed
+      # into the runner user's ~/.local/bin afterwards stays invisible until someone
+      # restarts it - and on the bhp VPS the runner user cannot. Re-add it per job.
+      - run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
       - name: Merge green Dependabot PRs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

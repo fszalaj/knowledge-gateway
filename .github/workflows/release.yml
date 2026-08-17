@@ -9,6 +9,7 @@ name: release
 # created before a failed upload would burn that version forever - the next run would see
 # the tag, decide "already released", and exit green while nothing was published.
 # `gh release create` creates the tag, so there is no separate tag push.
+# Distribution is PyPI only; there is no `stable` branch to move.
 # One-time setup on pypi.org: add a pending publisher for project `knowledge-gateway` ->
 # owner fszalaj, repo knowledge-gateway, workflow release.yml, environment pypi.
 on:
@@ -57,20 +58,10 @@ jobs:
             fi
           else
             version="$packaged"
-            # Nothing to do only when the tag exists AND stable already points at that tag.
-            # Keying on the tag alone would turn a half-finished release - published, but
-            # stable not moved - into a permanently green no-op consumers never receive;
-            # keying on HEAD instead would drag stable past the tag on every later commit.
+            # The tag is created last, so its existence means the release finished.
             if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null 2>&1; then
-              tagged=$(git rev-list -n1 "v$version")
-              if [ "$tagged" = "$(git ls-remote origin stable | cut -f1)" ]; then
-                echo "v$version is released and stable points at it - nothing to do"
-                echo "release=false" >> "$GITHUB_OUTPUT"; exit 0
-              fi
-              # Healing a half-finished release: operate on the tagged tree, not on main,
-              # so stable lands on the commit that was actually released.
-              echo "v$version is tagged but stable is elsewhere - finishing that release"
-              git checkout --detach "v$version"
+              echo "v$version is already released - nothing to do"
+              echo "release=false" >> "$GITHUB_OUTPUT"; exit 0
             fi
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
@@ -96,14 +87,7 @@ jobs:
         run: |
           tag="v${{ steps.plan.outputs.version }}"
           if gh release view "$tag" >/dev/null 2>&1; then
-            echo "release $tag already exists - re-run, continuing to stable"; exit 0
+            echo "release $tag already exists - nothing more to do"; exit 0
           fi
           gh release create "$tag" dist/* --target "$(git rev-parse HEAD)" \
             --title "$tag" --generate-notes
-
-      # Consumers pin `@stable`; a release that does not move it never reaches them. No
-      # --force: stable only ever fast-forwards, so re-releasing an old tag cannot roll
-      # every consumer back.
-      - name: Move stable to the released commit
-        if: steps.plan.outputs.release == 'true'
-        run: git push origin HEAD:stable

@@ -11,7 +11,7 @@ Separate an ordinary code change from a release. Do not move `stable`, create a 
 
 1. Confirm the configured vault and token files, service identity, current executable version, and current `stable` revision without printing secrets.
 2. Inspect `deploy/knowledge-gateway.service`, `deploy/knowledge-gateway-update.service`, `deploy/knowledge-gateway-update.timer`, and `deploy/auto-update.sh` before changing host state.
-3. For an immediate update, reinstall from `@stable`, restart the exact service, and verify that it stays active.
+3. For an immediate update, reinstall the latest PyPI release, restart the exact service, and verify that it stays active.
 4. Probe `http://127.0.0.1:8765/mcp/`. An unauthenticated HTTP `401` confirms the authenticated endpoint is reachable; use an authorized MCP smoke test to verify `list_vaults` and one bounded `read_note`.
 5. Record the deployed revision. If validation fails, restore the previously known version or tag and re-run the same checks.
 
@@ -25,7 +25,7 @@ The bundled updater compares the remote `stable` SHA, reinstalls, restarts, and 
 4. Open a pull request and require green CI for Python 3.11, 3.12, and 3.13. Merge only the reviewed release commit.
 5. Tag the exact green `main` commit as `vX.Y.Z` and push the immutable tag. The tag workflow builds artifacts, creates the GitHub release, and publishes to PyPI through OIDC Trusted Publishing.
 6. Verify the GitHub release and PyPI publication before moving `stable` to the same tag with `--force-with-lease`.
-7. Verify one refreshed `uvx --refresh @stable` client and each managed server health check.
+7. Verify one refreshed `uvx --refresh` client and each managed server health check.
 
 ## Completion report
 

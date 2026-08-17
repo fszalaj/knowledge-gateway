@@ -82,7 +82,7 @@ Install all optional capabilities when the full skill pack is required:
       "args": [
         "--refresh",
         "--from",
-        "knowledge-gateway[all] @ git+https://github.com/fszalaj/knowledge-gateway@stable",
+        "knowledge-gateway[all]",
         "knowledge-gateway",
         "--local"
       ]

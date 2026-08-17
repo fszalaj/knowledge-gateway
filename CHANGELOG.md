@@ -1,9 +1,19 @@
 # Changelog
 
-All notable changes to knowledge-gateway. Consumers track the moving **`stable`** branch
-(`uvx --refresh --from git+...@stable`); each release moves `stable` and auto-propagates on
-next launch (no per-repo re-pin). Every release is also an immutable `vX.Y.Z` tag for
-pinning/audit.
+All notable changes to knowledge-gateway. Consumers track the **PyPI** package
+(`uvx --refresh --from knowledge-gateway`); each release auto-propagates on next launch (no
+per-repo re-pin). Every release is also an immutable `vX.Y.Z` tag for pinning/audit.
+
+## v0.8.8 - 2026-08-18
+
+### Changed
+- Distribution moved off the `stable` git branch onto PyPI. `stable` existed because a moving
+  git ref was the only way to get "update once" before the package was published; PyPI now
+  does the same job with a real version number, so the branch is deleted and `release.yml` no
+  longer moves it. Consumers and servers resolve `knowledge-gateway` from PyPI - README,
+  `docs/agent-skills.md` and the setup/operations skills updated accordingly.
+- The Mac auto-updater compares the installed version against the latest PyPI release instead
+  of caching the `stable` SHA, so a half-finished update heals on the next run.
 
 ## v0.8.7 - 2026-08-18
 

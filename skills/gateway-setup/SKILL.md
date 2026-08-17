@@ -25,7 +25,7 @@ For the full local skill pack, merge this project-level entry into `.mcp.json`:
       "args": [
         "--refresh",
         "--from",
-        "knowledge-gateway[all] @ git+https://github.com/fszalaj/knowledge-gateway@stable",
+        "knowledge-gateway[all]",
         "knowledge-gateway",
         "--local"
       ]

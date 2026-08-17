@@ -55,27 +55,29 @@ transport, authentication/ACL, vault loading, and error masking.
 
 Most repos want **Local mode**. The shared server is only for a central, always-on team gateway.
 
-## Distribution - the `stable` branch ("update once")
+## Distribution - PyPI ("update once")
 
-The gateway ships from one moving branch, so a release reaches every consumer and server
-without re-pinning anything by hand.
+The gateway ships as a PyPI package, so a release reaches every consumer and server without
+re-pinning anything by hand.
 
 ```mermaid
 flowchart LR
-    PR[merge PR to main] --> TAG[tag vX.Y.Z]
-    TAG --> MV[move stable -> vX.Y.Z]
-    MV --> C["Consumers<br/>uvx --refresh @stable<br/>(updates next session)"]
-    MV --> S["Servers<br/>daily uv tool reinstall<br/>(restart if stable moved)"]
+    PR[merge PR to main] --> CI[green ci on main]
+    CI --> REL["release.yml<br/>publish PyPI + tag vX.Y.Z"]
+    REL --> C["Consumers<br/>uvx --refresh knowledge-gateway<br/>(updates next session)"]
+    REL --> S["Servers<br/>daily uv tool reinstall<br/>(restart if the version moved)"]
 ```
 
-- **Consumers** pin `@stable` with `uvx --refresh` -> the ref is re-fetched on every launch, so
-  a new release auto-propagates the next time an agent starts. No per-repo re-pin.
-- **Servers** (long-running) run a pinned `uv tool install @stable` plus a daily job that
-  reinstalls + restarts only when `stable` actually moves.
-- Every release is **also** an immutable `vX.Y.Z` tag - pin a tag instead of `stable` when you
-  need a frozen, auditable version.
+- **Consumers** run `uvx --refresh --from 'knowledge-gateway[graph]' knowledge-gateway` -> the
+  latest release is resolved on every launch, so a new release auto-propagates the next time an
+  agent starts. No per-repo re-pin.
+- **Servers** (long-running) run `uv tool install 'knowledge-gateway[graph,convert]'` plus a
+  daily job that reinstalls + restarts only when the published version actually moves.
+- Every release is **also** an immutable `vX.Y.Z` git tag - pin `==X.Y.Z` when you need a
+  frozen, auditable version.
 
-> A moving *tag* does not work (uvx caches the resolved commit); a *branch* + `--refresh` does.
+> Earlier releases moved a `stable` git branch for this. PyPI does the same job with a real
+> version number, so that branch is gone.
 
 ## Quickstart - local mode (zero secrets)
 
@@ -86,7 +88,7 @@ Add this to the repo's `.mcp.json` at the repo root:
   "mcpServers": {
     "wiki": {
       "command": "uvx",
-      "args": ["--refresh", "--from", "git+https://github.com/fszalaj/knowledge-gateway@stable",
+      "args": ["--refresh", "--from", "knowledge-gateway",
                "knowledge-gateway", "--local"]
     }
   }
@@ -96,7 +98,7 @@ Add this to the repo's `.mcp.json` at the repo root:
 - `--local` auto-detects the vault in the cwd, in order: the cwd itself if it has `.obsidian/`,
   then `./wiki`, then a single `*-obsidian-vault/`, then a single child dir with `.obsidian/`
   (ambiguous matches error). Pass `--vault ./<dir>` to be explicit.
-- `--refresh` re-fetches `@stable` each launch, so releases auto-apply (adds ~1-2s to start).
+- `--refresh` re-resolves the latest release each launch, so releases auto-apply (adds ~1-2s to start).
 - Commits are scoped to the vault's git subdir and attributed to your own
   `git config user.name/email`. No token: the trust boundary is local filesystem access.
 
@@ -172,7 +174,7 @@ For the complete pack, run local mode with all optional capabilities:
       "args": [
         "--refresh",
         "--from",
-        "knowledge-gateway[all] @ git+https://github.com/fszalaj/knowledge-gateway@stable",
+        "knowledge-gateway[all]",
         "knowledge-gateway",
         "--local"
       ]
@@ -275,10 +277,10 @@ Paste this into an agent at a repo's root to wire in local mode:
 Add the knowledge-gateway to this repo so agents can read/edit our vault over MCP with zero
 tokens:
 1. Create or merge `.mcp.json` at the repo root with an mcpServers."wiki" entry that runs:
-   uvx --refresh --from git+https://github.com/fszalaj/knowledge-gateway@stable knowledge-gateway --local
+   uvx --refresh --from knowledge-gateway knowledge-gateway --local
    (`--local` auto-detects the vault: ./wiki, a *-obsidian-vault dir, or a dir with .obsidian/.
    If detection is ambiguous, use `--vault ./<vault dir>` instead of `--local`.)
-2. Verify: `uvx --refresh --from git+https://github.com/fszalaj/knowledge-gateway@stable \
+2. Verify: `uvx --refresh --from knowledge-gateway \
    knowledge-gateway --help` resolves; then in the agent, call list_vaults and read one note.
 Branch + PR, no direct push, no AI attribution.
 ```
@@ -288,11 +290,11 @@ For the shared server, ask your gateway admin for a token, then run the `claude 
 
 ## Operate (servers)
 
-A server runs the `@stable` release as a `uv tool`, with a daily job that reinstalls and
+A server runs the latest release as a `uv tool`, with a daily job that reinstalls and
 restarts only when `stable` moved. Reference units are in `deploy/`:
 
 ```bash
-uv tool install --from git+https://github.com/fszalaj/knowledge-gateway@stable knowledge-gateway
+uv tool install knowledge-gateway
 # the binary lives in the uv cache, so point config at the live files via env:
 #   KNOWLEDGE_GATEWAY_VAULTS= <dir>/vaults.yaml   KNOWLEDGE_GATEWAY_TOKENS= <dir>/tokens.yaml
 ```
@@ -301,7 +303,7 @@ uv tool install --from git+https://github.com/fszalaj/knowledge-gateway@stable k
 - `deploy/knowledge-gateway-update.{service,timer}` + `deploy/auto-update.sh` - the daily auto-update.
 
 Update now instead of waiting for the timer: `uv tool install --reinstall --from
-git+https://github.com/fszalaj/knowledge-gateway@stable knowledge-gateway`, then restart the
+knowledge-gateway`, then restart the
 service. Health: `curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8765/mcp/` -> `401`.
 
 ## Release (maintainers)
