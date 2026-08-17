@@ -76,8 +76,11 @@ flowchart LR
 - Every release is **also** an immutable `vX.Y.Z` git tag - pin `==X.Y.Z` when you need a
   frozen, auditable version.
 
-> Earlier releases moved a `stable` git branch for this. PyPI does the same job with a real
-> version number, so that branch is gone.
+> The **`stable`** git branch remains as a permanent alias for the latest release - every
+> release moves it, so a `@stable` pin never goes stale. PyPI is the recommended channel
+> (`--from 'knowledge-gateway[graph]'`); use `@stable` only when you must install straight
+> from git:
+> `uvx --refresh --from 'knowledge-gateway[graph] @ git+https://github.com/fszalaj/knowledge-gateway@stable' knowledge-gateway`.
 
 ## Quickstart - local mode (zero secrets)
 
