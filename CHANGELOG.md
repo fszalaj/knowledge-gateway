@@ -5,6 +5,12 @@ All notable changes to knowledge-gateway. Consumers track the moving **`stable`*
 next launch (no per-repo re-pin). Every release is also an immutable `vX.Y.Z` tag for
 pinning/audit.
 
+## v0.8.5 - 2026-08-17
+
+### Fixed
+- PyPI publishing now uses `pypa/gh-action-pypi-publish` v1.14.2, which accepts the Core
+  Metadata 2.5 emitted by current builds.
+
 ## v0.8.4 - 2026-08-17
 
 ### Added
