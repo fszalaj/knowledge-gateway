@@ -1,0 +1,64 @@
+name: dependabot-automerge
+
+# Dependabot PRs merge themselves once every check on their head commit is green, so no
+# dependabot/* branch outlives its checks and the repo keeps only its long-lived branches.
+# Fires when a gating workflow finishes (fast path) and hourly (catches missed events).
+# Fail-closed: a head commit that nothing has reported on is NOT merged, because "no
+# verdicts yet" and "nothing gates this" look identical over the API.
+# why: wiki "Local runners and dependabot automerge across repos"
+on:
+  workflow_run:
+    workflows: ["ci"]
+    types: [completed]
+  schedule:
+    - cron: '10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  # Never cancel: a cancel between the merge call and the branch deletion would strand the
+  # dependabot/* branch with its PR already closed, where nothing lists it again.
+  group: dependabot-automerge
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Merge green Dependabot PRs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          command -v gh >/dev/null || { echo "gh CLI is missing on this runner"; exit 1; }
+          prs=$(gh pr list --repo "$REPO" --author 'app/dependabot' --state open --limit 100 \
+                   --json number,headRefOid --jq '.[] | "\(.number) \(.headRefOid)"')
+          if [ -z "$prs" ]; then echo "no open dependabot PRs"; exit 0; fi
+          failed=0
+          while read -r pr sha; do
+            # Check runs and legacy commit statuses both gate a PR; read both.
+            verdicts=$( { gh api "repos/$REPO/commits/$sha/check-runs" --paginate \
+                            --jq '.check_runs[] | if .status != "completed" then "pending" else .conclusion end'
+                          gh api "repos/$REPO/commits/$sha/status" \
+                            --jq '.statuses[] | .state'; } )
+            green=$(printf '%s\n' "$verdicts" | grep -c '^success$' || true)
+            bad=$(printf '%s\n' "$verdicts" | grep -cvE '^(success|neutral|skipped)$' || true)
+            if [ "$green" -eq 0 ] || [ "$bad" -ne 0 ]; then
+              echo "#$pr: $green green, $bad not green - not merging"; continue
+            fi
+            # A conflicted or still-computing PR is an expected state, not an error: skip it
+            # quietly so the hourly sweep does not go red until dependabot rebases.
+            mergeable=$(gh pr view "$pr" --repo "$REPO" --json mergeable --jq '.mergeable')
+            if [ "$mergeable" != MERGEABLE ]; then
+              echo "#$pr: mergeable=$mergeable - leaving it to dependabot"; continue
+            fi
+            echo "#$pr: green - merging"
+            # One unmergeable PR must not stop the sweep; the step still ends red.
+            gh pr merge "$pr" --repo "$REPO" --squash --delete-branch \
+              || { echo "#$pr: merge failed"; failed=1; }
+          done <<< "$prs"
+          exit $failed

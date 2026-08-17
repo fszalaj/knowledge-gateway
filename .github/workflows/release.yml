@@ -1,24 +1,40 @@
 name: release
 
-# On a vX.Y.Z tag: build, publish a GitHub Release, then publish to PyPI via Trusted
-# Publishing (OIDC, no token). CI (ci.yml) also runs on tags, so a release is only cut
-# from a known-green tree. The GitHub Release runs before PyPI so a not-yet-configured
-# Trusted Publisher cannot block it.
+# Two ways in, one job:
+#   - a green `ci` run on main whose pyproject version has no tag yet -> cut that release;
+#   - a manually pushed vX.Y.Z tag -> release that tag.
+# Gating on the `ci` workflow_run rather than the raw push is what keeps a release
+# known-green: a push-triggered release would race its own CI.
+# Order matters: PyPI first, then the tag. PyPI refuses a re-upload of a version, so a tag
+# created before a failed upload would burn that version forever - the next run would see
+# the tag, decide "already released", and exit green while nothing was published.
+# `gh release create` creates the tag, so there is no separate tag push.
 # One-time setup on pypi.org: add a pending publisher for project `knowledge-gateway` ->
 # owner fszalaj, repo knowledge-gateway, workflow release.yml, environment pypi.
 on:
   push:
     tags: ['v*']
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release
   cancel-in-progress: false
 
 jobs:
   release:
+    # head_repository pins the run to this repo: a fork can name its branch `main`, so the
+    # branch check alone would not keep fork CI out of the release path.
+    if: >-
+      github.event_name == 'push' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -26,11 +42,61 @@ jobs:
     environment: pypi
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'push' && github.ref || github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Decide what to release
+        id: plan
+        run: |
+          packaged=$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)
+          if [ "${{ github.event_name }}" = push ]; then
+            version="${GITHUB_REF_NAME#v}"
+            if [ "$version" != "$packaged" ]; then
+              echo "tag v$version does not match pyproject $packaged"; exit 1
+            fi
+          else
+            version="$packaged"
+            # Skip only when the tag exists AND stable already points here. Keying on the
+            # tag alone would turn a half-finished release - published, but stable not
+            # moved - into a permanently green no-op that consumers never receive.
+            if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null 2>&1 \
+               && [ "$(git rev-parse HEAD)" = "$(git ls-remote origin stable | cut -f1)" ]; then
+              echo "v$version is released and stable points at it - nothing to do"
+              echo "release=false" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "release=true" >> "$GITHUB_OUTPUT"
+
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        if: steps.plan.outputs.release == 'true'
       - run: uv build
-      - name: Publish GitHub Release
+        if: steps.plan.outputs.release == 'true'
+
+      # skip-existing keeps the job re-runnable: if a later step fails, re-running must not
+      # die on "version already uploaded" - PyPI refuses a re-upload.
+      - name: Publish to PyPI (Trusted Publishing)
+        if: steps.plan.outputs.release == 'true'
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          skip-existing: true
+
+      - name: Publish GitHub Release (creates the tag)
+        if: steps.plan.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ github.ref_name }}" dist/* --title "${{ github.ref_name }}" --generate-notes
-      - name: Publish to PyPI (Trusted Publishing)
-        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        run: |
+          tag="v${{ steps.plan.outputs.version }}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "release $tag already exists - re-run, continuing to stable"; exit 0
+          fi
+          gh release create "$tag" dist/* --target "$(git rev-parse HEAD)" \
+            --title "$tag" --generate-notes
+
+      # Consumers pin `@stable`; a release that does not move it never reaches them. No
+      # --force: stable only ever fast-forwards, so re-releasing an old tag cannot roll
+      # every consumer back.
+      - name: Move stable to the released commit
+        if: steps.plan.outputs.release == 'true'
+        run: git push origin HEAD:stable

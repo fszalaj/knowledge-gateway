@@ -5,6 +5,18 @@ All notable changes to knowledge-gateway. Consumers track the moving **`stable`*
 next launch (no per-repo re-pin). Every release is also an immutable `vX.Y.Z` tag for
 pinning/audit.
 
+## v0.8.6 - 2026-08-17
+
+### Changed
+- `release.yml` now cuts a release by itself: a green `ci` run on `main` whose `pyproject.toml`
+  version has no tag yet tags the commit, publishes the GitHub Release and PyPI artifact, and
+  moves `stable`. Pushing a `vX.Y.Z` tag by hand still works. Previously the tag, the release
+  and the `stable` pointer were three separate manual steps, so `stable` could lag `main`.
+- Dependabot pull requests merge themselves once every check on their head commit is green
+  (`dependabot-automerge.yml`), so no `dependabot/*` branch outlives its checks.
+
+The published package is unchanged from v0.8.5; this release is release plumbing only.
+
 ## v0.8.5 - 2026-08-17
 
 ### Fixed
