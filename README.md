@@ -110,7 +110,7 @@ Open the repo in your agent, approve the `wiki` server once, done.
 | `list_notes` | Markdown paths in a vault |
 | `read_note` | raw note content |
 | `list_attachments` / `read_attachment` | list / read binary attachments (image -> inline Image, else File) |
-| `list_canvases` / `read_canvas  / `write_canvas` | list / read / write Obsidian Canvas (nodes, groups, colors) |
+| `list_canvases` / `read_canvas` / `write_canvas` | list / read / write Obsidian Canvas (nodes, groups, colors) |
 | `search` | ripgrep literal/regex full-text |
 | `backlinks` | notes that `[[wikilink]]` to a note |
 | `list_tags` | inline `#tags` with counts |
@@ -125,28 +125,39 @@ Open the repo in your agent, approve the `wiki` server once, done.
 | `graph_build` | build a code/Ansible graph from a source tree into `.graph/<name>.json` (local mode only) |
 | `convert_to_markdown` | convert a file (PDF/Office/image/HTML/...) in the vault to Markdown (optional `[convert]`) |
 
-Edits are atomic (temp file + `rename`). Every path goes through `safe_note_path`, which blocks
-traversal, symlink escape, hidden/dotfiles, non-`.md` targets, and `.git`/`.obsidian` - a caller
-can never read or write outside the vault's notes.
+Note writes are atomic (temp file + `rename`) and use `safe_note_path`. Attachments, canvases,
+conversion inputs and graph files use their own type-specific containment guards. Together they
+block traversal, symlink escape and access outside the configured vault.
 
 ## Agent skills
 
-The repository includes a validated, provider-neutral Agent Skills pack under
-`.claude/skills/`. The `.agents/skills` symlink points to the same canonical files for Codex and
-other clients that use the open Agent Skills convention.
+The repository includes a validated, provider-neutral Agent Skills pack under `skills/`.
+`.agents/skills` and `.claude/skills` point to the same canonical files for native discovery.
+Consumer repositories can instead own copies in their documented project-level directory.
 
 The pack covers:
 
-- `gateway-setup` for MCP configuration and capability verification;
-- `code-graph` and `code-impact` for architecture discovery and blast-radius analysis;
+- `gateway-setup` and `gateway-operations` for configuration, verification, operation and release;
+- `code-graph-build`, `code-graph-explore` and `code-impact` for architecture discovery and
+  blast-radius analysis;
 - `wiki-query`, `wiki-curate`, `wiki-ingest`, `wiki-lint`, and `wiki-fold` for durable knowledge;
 - `canvas` and `obsidian-markdown` for Obsidian-native authoring;
-- `knowledge-workflow` for the full discovery -> specification -> implementation -> deterministic
-  gates -> independent review -> curation loop.
+- `document-convert` for reviewed PDF and Office conversion; and
+- `cordis-composability` for reversible effects and declared dependencies.
 
 Skills add repeatable procedures, not privileges. Server-side ACLs, path guards, hooks and CI remain
-the enforcement layer. The machine-readable inventory is `.claude/skills/manifest.json`; CI validates
-that every skill is registered and references only real gateway tools.
+the enforcement layer. The machine-readable inventory is `skills/manifest.json`; CI validates that
+every skill is registered and references only real gateway tools.
+
+Copy selected skills into the destination listed in the sourced compatibility table:
+
+```bash
+mkdir -p ../consumer/.agents/skills
+cp -R skills/wiki-query skills/wiki-curate ../consumer/.agents/skills/
+```
+
+Copy on a branch, do not overwrite an existing same-name skill blindly, and review the consumer
+diff. The copied files are then owned and versioned by the consumer repository.
 
 See [`docs/agent-skills.md`](docs/agent-skills.md) for the compatibility matrix, required extras,
 workflow harness, maintenance rules and security boundaries.
@@ -181,7 +192,7 @@ Two opt-in capabilities, gated behind extras so the core install stays dependenc
 |---|---|
 | `[graph]` | Python (`ast`) + Ansible (PyYAML) code graph + the query tools |
 | `[graph-all]` | the above + a broad tree-sitter pass over ~30 languages (JS/TS/TSX, Go, Rust, Java, C#, C/C++, Ruby, PHP, bash, PowerShell, Terraform/HCL, Lua, Kotlin, Swift, Scala, R, Perl, Elixir, Dart, SQL, ...): definitions, `imports`, and within-file `calls` |
-| `[convert]` | attachment -> Markdown via markitdown |
+| `[convert]` | attachment -> Markdown via MarkItDown; opt-in PDF and Office parsers add a materially larger dependency tree, including native-extension packages |
 
 **Build a graph** (AST-only - local, no network, no LLM) where the code lives:
 
@@ -193,9 +204,9 @@ knowledge-gateway-graph /path/to/code-repo -o /path/to/vault/.graph/myrepo.json
 **Query it** over MCP with `graph_query` / `graph_neighbors` / `god_nodes` /
 `graph_shortest_path` / `graph_stats`. The graph captures functions/classes/imports/calls and -
 uniquely for Ansible - roles, tasks, handlers, `include_role`/`import_tasks`/`notify`, and
-`task -> filter plugin` edges. Graph files live in the vault's `.graph/`, are vault-contained
-(resolved + checked to stay inside the vault), and are read-only to the gateway - the vault tools
-never depend on them.
+`task -> filter plugin` edges. Graph files live in the vault's `.graph/` and are vault-contained
+(resolved + checked to stay inside the vault). Query tools are read-only; local `graph_build`
+deliberately creates or replaces the selected graph artifact. Vault note tools never depend on it.
 
 ## Shared server mode
 
@@ -271,7 +282,7 @@ For the shared server, ask your gateway admin for a token, then run the `claude 
 
 ## Operate (servers)
 
-A server runs the `@stable` release as a `uv toool`, with a daily job that reinstalls and
+A server runs the `@stable` release as a `uv tool`, with a daily job that reinstalls and
 restarts only when `stable` moved. Reference units are in `deploy/`:
 
 ```bash
@@ -289,10 +300,14 @@ service. Health: `curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8765/m
 
 ## Release (maintainers)
 
-1. PR -> merge to `main` (CI: `uv lock --check`, pytest matrix).
-2. Bump `pyproject.toml` version + `CHANGELOG.md`.
-3. Tag `vX.Y.Z` and push the tag (the release workflow builds it).
-4. Move `stable`: `git branch -f stable vX.Y.Z && git push --force-with-lease origin stable`.
+1. Start a release branch from current `main`.
+2. Move `Unreleased` changelog entries into the new version section and update the version in
+   `pyproject.toml` and `server.json`.
+3. Run `uv lock --check`, the skill validator, the full test suite and `uv build`; open a PR and
+   merge only after the Python 3.11-3.13 CI matrix is green.
+4. Tag the green `main` commit as `vX.Y.Z` and push the tag (the release workflow builds and publishes it).
+5. Verify the GitHub release and PyPI publication, then move `stable` to the same tag with
+   `--force-with-lease`.
 
 Consumers pick it up next session; servers within a day (or restart now).
 

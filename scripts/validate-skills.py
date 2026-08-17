@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILLS_ROOT = ROOT / ".claude" / "skills"
+SKILLS_ROOT = ROOT / "skills"
 MANIFEST = SKILLS_ROOT / "manifest.json"
 NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 KNOWN_TOOLS = {
@@ -46,7 +46,7 @@ def parse_frontmatter(text: str) -> tuple[dict[str, str], str]:
 
 def validate(root: Path = ROOT) -> list[str]:
     errors: list[str] = []
-    skills_root = root / ".claude" / "skills"
+    skills_root = root / "skills"
     manifest_path = skills_root / "manifest.json"
     if not manifest_path.is_file():
         return [f"missing manifest: {manifest_path.relative_to(root)}"]
@@ -74,7 +74,7 @@ def validate(root: Path = ROOT) -> list[str]:
         if name in seen:
             errors.append(f"duplicate skill name: {name}")
         seen.add(name)
-        expected_rel = Path(".claude") / "skills" / name / "SKILL.md"
+        expected_rel = Path("skills") / name / "SKILL.md"
         if rel != expected_rel.as_posix():
             errors.append(f"{name}: path must be {expected_rel.as_posix()}")
         path = root / expected_rel
@@ -89,32 +89,42 @@ def validate(root: Path = ROOT) -> list[str]:
             continue
         if fm.get("name") != name:
             errors.append(f"{name}: frontmatter name must match directory")
+        extra_keys = sorted(set(fm) - {"name", "description"})
+        if extra_keys:
+            errors.append(f"{name}: unsupported frontmatter keys: {', '.join(extra_keys)}")
         if len(fm.get("description", "")) < 40:
             errors.append(f"{name}: description must explain when the skill is used")
         if not body.startswith("# "):
             errors.append(f"{name}: body must start with one H1 heading")
-        if re.search(r"(?:^|\s)/(?:Users|home|tmp)/", body):
+        if re.search(r"(?<![A-Za-z0-9])/(?:Users|home|tmp)/", body):
             errors.append(f"{name}: contains a machine-specific absolute path")
         required = entry.get("requires", [])
-        if not isinstance(required, list) or any(not isinstance(x, str) for x in required):
-            errors.append(f"{name}: requires must be a string list")
+        optional = entry.get("optional_requires", [])
+        if any(not isinstance(items, list) or any(not isinstance(x, str) for x in items)
+               for items in (required, optional)):
+            errors.append(f"{name}: requires and optional_requires must be string lists")
         else:
-            unknown = sorted(set(required) - KNOWN_TOOLS)
+            declared = set(required) | set(optional)
+            unknown = sorted(declared - KNOWN_TOOLS)
             if unknown:
                 errors.append(f"{name}: unknown tools in manifest: {', '.join(unknown)}")
-            for tool in required:
+            for tool in declared:
                 if f"`{tool}`" not in body:
-                    errors.append(f"{name}: required tool `{tool}` is not documented in SKILL.md")
+                    errors.append(f"{name}: declared tool `{tool}` is not documented in SKILL.md")
+            undeclared = sorted(tool for tool in KNOWN_TOOLS if f"`{tool}`" in body and tool not in declared)
+            if undeclared:
+                errors.append(f"{name}: documented tools missing from manifest: {', '.join(undeclared)}")
 
     discovered = set(skills_root.glob("*/SKILL.md"))
     for path in sorted(discovered - manifest_paths):
         errors.append(f"unregistered skill: {path.relative_to(root)}")
 
-    alias = root / ".agents" / "skills"
-    if not alias.is_symlink():
-        errors.append(".agents/skills must be a symlink to the canonical skill pack")
-    elif os.readlink(alias) != "../.claude/skills":
-        errors.append(".agents/skills must point to ../.claude/skills")
+    for alias_path in (Path(".agents/skills"), Path(".claude/skills")):
+        alias = root / alias_path
+        if not alias.is_symlink():
+            errors.append(f"{alias_path} must be a symlink to the canonical skill pack")
+        elif os.readlink(alias) != "../skills":
+            errors.append(f"{alias_path} must point to ../skills")
     return errors
 
 

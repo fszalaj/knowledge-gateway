@@ -15,7 +15,7 @@ Use `list_notes`, `list_attachments`, `read_note`, `read_attachment`, `convert_t
 
 1. Select the vault and locate the source with `list_notes` or `list_attachments`.
 2. Read Markdown sources with `read_note`, supported binary sources with `read_attachment`, or call `convert_to_markdown` for PDF, Office, image, HTML, CSV, and similar files when the `[convert]` extra is installed.
-3. Treat raw/source directories as immutable unless local instructions explicitly say otherwise.
+3. Treat raw/source directories as immutable unless local instructions explicitly say otherwise. Gateway tools deliberately cannot access hidden paths such as `.raw/`; use a separately authorized local-filesystem workflow instead of weakening that guard.
 4. Extract verifiable entities, concepts, decisions, requirements, procedures, risks, owners, dates, and unresolved questions.
 5. Search the vault to avoid duplicate pages and to identify canonical terminology.
 6. Read the relevant `_templates/<type>.md` files when present.

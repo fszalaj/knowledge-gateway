@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "skills": [
+    {
+      "name": "gateway-setup",
+      "path": "skills/gateway-setup/SKILL.md",
+      "mode": "configuration",
+      "requires": ["list_vaults", "read_note", "git_status"],
+      "optional_requires": ["list_graphs", "graph_query", "convert_to_markdown"]
+    },
+    {
+      "name": "gateway-operations",
+      "path": "skills/gateway-operations/SKILL.md",
+      "mode": "operations",
+      "requires": ["list_vaults", "read_note"]
+    },
+    {
+      "name": "code-graph-build",
+      "path": "skills/code-graph-build/SKILL.md",
+      "mode": "local-build",
+      "requires": ["list_vaults", "list_graphs", "graph_build", "graph_stats"]
+    },
+    {
+      "name": "code-graph-explore",
+      "path": "skills/code-graph-explore/SKILL.md",
+      "mode": "read-only",
+      "requires": ["list_graphs", "graph_stats", "graph_query", "graph_neighbors", "god_nodes", "graph_shortest_path"]
+    },
+    {
+      "name": "code-impact",
+      "path": "skills/code-impact/SKILL.md",
+      "mode": "read-mostly",
+      "requires": ["graph_query", "graph_neighbors", "graph_shortest_path", "graph_stats"]
+    },
+    {
+      "name": "wiki-query",
+      "path": "skills/wiki-query/SKILL.md",
+      "mode": "read-only",
+      "requires": ["list_vaults", "list_notes", "read_note", "search", "query_notes", "backlinks", "list_tags"]
+    },
+    {
+      "name": "wiki-curate",
+      "path": "skills/wiki-curate/SKILL.md",
+      "mode": "read-write",
+      "requires": ["list_vaults", "read_note", "search", "backlinks", "write_note", "patch_note", "patch_frontmatter", "rename_note", "delete_note", "git_status", "git_commit"]
+    },
+    {
+      "name": "wiki-ingest",
+      "path": "skills/wiki-ingest/SKILL.md",
+      "mode": "read-write",
+      "requires": ["list_notes", "list_attachments", "read_note", "read_attachment", "convert_to_markdown", "search", "write_note", "patch_note", "git_status"]
+    },
+    {
+      "name": "wiki-lint",
+      "path": "skills/wiki-lint/SKILL.md",
+      "mode": "read-mostly",
+      "requires": ["list_notes", "read_note", "query_notes", "list_tags", "backlinks", "search", "list_attachments", "git_status"]
+    },
+    {
+      "name": "wiki-fold",
+      "path": "skills/wiki-fold/SKILL.md",
+      "mode": "read-write",
+      "requires": ["read_note", "write_note", "patch_note", "git_status", "git_commit"]
+    },
+    {
+      "name": "canvas",
+      "path": "skills/canvas/SKILL.md",
+      "mode": "read-write",
+      "requires": ["list_canvases", "read_canvas", "write_canvas"]
+    },
+    {
+      "name": "obsidian-markdown",
+      "path": "skills/obsidian-markdown/SKILL.md",
+      "mode": "reference",
+      "requires": ["backlinks", "patch_frontmatter", "patch_note"]
+    },
+    {
+      "name": "document-convert",
+      "path": "skills/document-convert/SKILL.md",
+      "mode": "read-mostly",
+      "requires": ["list_vaults", "convert_to_markdown"],
+      "optional_requires": ["write_note", "git_status"]
+    },
+    {
+      "name": "cordis-composability",
+      "path": "skills/cordis-composability/SKILL.md",
+      "mode": "architecture-review",
+      "requires": []
+    }
+  ]
+}

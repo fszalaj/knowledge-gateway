@@ -14,12 +14,12 @@ Use `graph_query`, `graph_neighbors`, `graph_shortest_path`, and `graph_stats`.
 ## Procedure
 
 1. State the proposed change precisely: target symbol or module, behavior, compatibility expectation, and deployment boundary.
-2. Run the `code-graph` workflow or confirm the existing graph is current.
+2. Run `code-graph-build` or confirm the existing graph has current provenance, then use `code-graph-explore` for orientation.
 3. Resolve the target with `graph_query`. If several nodes match, inspect all candidates before selecting one.
 4. Inspect direct outgoing dependencies with `graph_neighbors(direction=out, depth=1)`.
 5. Inspect direct incoming dependants with `graph_neighbors(direction=in, depth=1)`.
 6. Expand to depth 2 only for shared modules, public interfaces, Ansible roles, handlers, filter plugins, Terraform resources, or other cross-cutting nodes.
-7. Use `graph_shortest_path` for suspected transitive consumers that are not directly connected.
+7. Use `graph_shortest_path` for suspected transitive connections that are not direct. It uses an undirected view; verify direction with `graph_neighbors`.
 8. Read every load-bearing source file and relevant tests. Search for dynamic references, strings, configuration keys, generated clients, schemas, migrations, documentation, and CI/deployment coupling that the graph may not model.
 9. Classify the impact:
    - **required changes** - compile/runtime breakage or incorrect behavior without them;
