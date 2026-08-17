@@ -1,11 +1,17 @@
 #!/bin/sh
-# Daily: update this host's gateway to the latest @stable; reinstall + restart only if it moved.
+# Daily: update this host's gateway to the latest PyPI release; reinstall + restart only if
+# the published version moved.
 export PATH="$HOME/.local/bin:$PATH"
-SHA_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/knowledge-gateway-stable.sha"
-mkdir -p "$(dirname "$SHA_FILE")"
-remote=$(git ls-remote https://github.com/fszalaj/knowledge-gateway stable 2>/dev/null | awk '{print $1}')
-[ -z "$remote" ] && exit 0
-[ "$remote" = "$(cat "$SHA_FILE" 2>/dev/null)" ] && exit 0
-uv tool install --reinstall --from "git+https://github.com/fszalaj/knowledge-gateway@stable" knowledge-gateway || exit 1
+
+latest=$(curl -fsS https://pypi.org/pypi/knowledge-gateway/json \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["info"]["version"])' 2>/dev/null)
+[ -z "$latest" ] && exit 0
+
+# The installed version is the state, so a half-finished update heals on the next run -
+# unlike a cached marker file, which can claim success the install never reached.
+installed=$(uv tool list 2>/dev/null | awk '/^knowledge-gateway /{print substr($2,2)}')
+[ "$latest" = "$installed" ] && exit 0
+
+uv tool install --reinstall "knowledge-gateway==$latest" || exit 1
 systemctl --user restart knowledge-gateway || exit 1
-echo "$remote" > "$SHA_FILE"
+echo "knowledge-gateway ${installed:-none} -> $latest"
