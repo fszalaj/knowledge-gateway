@@ -39,6 +39,38 @@ def _workspace(root):
         {"datasetReference": {"byPath": {"path": "../SalesModel.SemanticModel"}}}))
 
 
+def _control_flow(root):
+    """A pipeline whose real work sits inside control-flow branches.
+
+    Fabric gives each branch its own key rather than one shared `activities` list, and nests
+    them: a loop holds a condition, the condition's true branch holds the activity that actually
+    runs something. Only the innermost activity carries the reference.
+    """
+    _mk(root, "Archive.DataPipeline/.platform", json.dumps(
+        {"metadata": {"type": "DataPipeline", "displayName": "Archive"}}))
+    _mk(root, "Fallback.Notebook/.platform", json.dumps(
+        {"metadata": {"type": "Notebook", "displayName": "Fallback"},
+         "config": {"logicalId": "22222222-2222-2222-2222-222222222222"}}))
+    _mk(root, "Ingest.DataPipeline/.platform", json.dumps(
+        {"metadata": {"type": "DataPipeline", "displayName": "Ingest"}}))
+    _mk(root, "Ingest.DataPipeline/pipeline-content.json", json.dumps({"properties": {"activities": [
+        {"name": "Route", "type": "Switch", "typeProperties": {
+            "on": {"value": "@pipeline().parameters.mode", "type": "Expression"},
+            "cases": [],
+            "defaultActivities": [
+                {"name": "Run fallback", "type": "TridentNotebook",
+                 "typeProperties": {"notebookId": "22222222-2222-2222-2222-222222222222"}}]}},
+        {"name": "For each entry", "type": "ForEach", "typeProperties": {"activities": [
+            {"name": "Archive if asked", "type": "IfCondition", "typeProperties": {
+                "expression": {"value": "@equals(1, 1)", "type": "Expression"},
+                "ifTrueActivities": [
+                    {"name": "Run archive", "type": "ExecutePipeline", "typeProperties": {
+                        "pipeline": {"referenceName": "Archive", "type": "PipelineReference"},
+                        "waitOnCompletion": True}}],
+                "ifFalseActivities": []}}]}},
+    ]}}))
+
+
 def _index(frag):
     return ({n["id"] for n in frag["nodes"]},
             {(e["source"], e["relation"], e["target"]) for e in frag["edges"]})
@@ -80,6 +112,79 @@ def test_measures_belong_to_the_table_above_them(tmp_path):
             "fabricmeasure:SalesModel/Sales/Total Sales") in edges
     assert ("fabrictable:SalesModel/Date Table", "has_measure",
             "fabricmeasure:SalesModel/Date Table/YTD") in edges
+
+
+def test_branch_activities_are_reached(tmp_path):
+    # Only ForEach and Until put their children under a plain `activities` list. A branch key
+    # the walker does not know hides every activity below it, however deep the real work sits.
+    _control_flow(tmp_path)
+    nodes, edges = _index(extract_fabric.extract(tmp_path))
+    assert {"fabricactivity:Ingest/Run fallback", "fabricactivity:Ingest/Run archive"} <= nodes
+    assert ("fabric:DataPipeline:Ingest", "contains", "fabricactivity:Ingest/Run fallback") in edges
+    assert ("fabric:DataPipeline:Ingest", "contains", "fabricactivity:Ingest/Run archive") in edges
+
+
+def test_branch_child_owns_the_invoke_not_its_containers(tmp_path):
+    # Loop > condition > the activity that runs something. Crediting a container with the call
+    # is a different and wrong claim: it says the work happens on every iteration rather than
+    # only when the branch is taken.
+    _control_flow(tmp_path)
+    _, edges = _index(extract_fabric.extract(tmp_path))
+    assert ("fabricactivity:Ingest/Run archive", "invokes", "fabric:DataPipeline:Archive") in edges
+    assert ("fabricactivity:Ingest/Run fallback", "invokes", "fabric:Notebook:Fallback") in edges
+    for container in ("fabricactivity:Ingest/Archive if asked",
+                      "fabricactivity:Ingest/For each entry",
+                      "fabricactivity:Ingest/Route"):
+        assert not [e for e in edges if e[0] == container and e[1] == "invokes"]
+
+
+def test_each_activity_is_emitted_once(tmp_path):
+    # The walker descends through the branch keys and, separately, through every other value.
+    # A branch list reached by both routes would duplicate the activity and every edge under it.
+    _control_flow(tmp_path)
+    frag = extract_fabric.extract(tmp_path)
+    ids = [n["id"] for n in frag["nodes"]]
+    assert len(ids) == len(set(ids))
+    contains = [e for e in frag["edges"] if e["relation"] == "contains"
+                and e["target"] == "fabricactivity:Ingest/Run archive"]
+    assert len(contains) == 1
+
+
+def test_variable_library_and_data_agent_are_artifacts(tmp_path):
+    # Ordinary <Name>.<Type> folders that were simply absent from TYPES, so a workspace using
+    # them reported fewer artifacts than it has.
+    for name, atype in (("SalesVars", "VariableLibrary"), ("SalesAgent", "DataAgent")):
+        _mk(tmp_path, f"{name}.{atype}/.platform", json.dumps(
+            {"metadata": {"type": atype, "displayName": name}}))
+    nodes, _ = _index(extract_fabric.extract(tmp_path))
+    assert {"fabric:VariableLibrary:SalesVars", "fabric:DataAgent:SalesAgent"} <= nodes
+
+
+def test_a_known_suffix_without_a_system_file_is_not_an_artifact(tmp_path):
+    # The type list is broad on purpose, and several entries are ordinary words. Fabric always
+    # writes a system file beside the definition, so that file - not the suffix - is the evidence.
+    _mk(tmp_path, "world.Map/tiles.json", "{}")
+    _mk(tmp_path, "rollout.Plan/README.md", "not a workspace\n")
+    assert extract_fabric.extract(tmp_path) == {"nodes": [], "edges": []}
+
+
+def test_version_1_system_files_still_identify_an_artifact(tmp_path):
+    # Before .platform, the same two fields lived in item.metadata.json and item.config.json.
+    # Reading only the newer file leaves the display name to the folder and the logical id
+    # unknown, and every reference written as an id stops resolving.
+    _mk(tmp_path, "Legacy.Notebook/item.metadata.json", json.dumps(
+        {"type": "Notebook", "displayName": "LoadSales"}))
+    _mk(tmp_path, "Legacy.Notebook/item.config.json", json.dumps(
+        {"version": "1.0", "logicalId": "33333333-3333-3333-3333-333333333333"}))
+    _mk(tmp_path, "Sales.DataPipeline/.platform", json.dumps(
+        {"metadata": {"type": "DataPipeline", "displayName": "Sales"}}))
+    _mk(tmp_path, "Sales.DataPipeline/pipeline-content.json", json.dumps({"properties": {"activities": [
+        {"name": "Run notebook", "type": "TridentNotebook",
+         "typeProperties": {"notebookId": "33333333-3333-3333-3333-333333333333"}}]}}))
+    nodes, edges = _index(extract_fabric.extract(tmp_path))
+    # The display name wins over the folder stem, which is what the id resolves to.
+    assert "fabric:Notebook:LoadSales" in nodes
+    assert ("fabricactivity:Sales/Run notebook", "invokes", "fabric:Notebook:LoadSales") in edges
 
 
 def test_repo_without_fabric_artifacts_is_empty(tmp_path):
