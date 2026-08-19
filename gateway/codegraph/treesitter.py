@@ -58,6 +58,10 @@ _DEFS = {
     "function_expression": "function", "arrow_function": "function", "function_statement": "function",
     "generator_function_declaration": "function", "func_literal": "function", "fn_item": "function",
     "method_definition": "method", "method_declaration": "method", "method_spec": "method",
+    # sql ddl: a deployment's tables, views and procedures are definitions like any other, and
+    # without these kinds a .sql file parsed to a bare module node.
+    "create_table": "table", "create_view": "view", "create_procedure": "procedure",
+    "create_function": "function", "create_index": "index", "create_schema": "namespace",
     "constructor_declaration": "method", "method": "method", "singleton_method": "method",
     "subroutine": "function", "lambda": "function", "macro_definition": "function",
     "anonymous_function": "function",
@@ -91,6 +95,10 @@ _NAME_KINDS = {
     "identifier", "type_identifier", "field_identifier", "constant", "property_identifier",
     "name", "word", "scoped_identifier", "simple_identifier", "constant_identifier",
     "command_name",
+    # powershell names its functions in a dedicated node, so the identifier fallback never
+    # matched and every .ps1 produced a file node with nothing in it; sql puts the qualified
+    # name of a created object in object_reference.
+    "function_name", "object_reference",
 }
 _STRING_KINDS = {
     "string", "string_literal", "interpreted_string_literal", "string_lit", "string_fragment",

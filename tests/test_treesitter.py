@@ -47,5 +47,25 @@ def test_go_rust_terraform(tmp_path):
     assert any(n["type"] == "resource" for n in ft["nodes"])
 
 
+def test_powershell_and_sql_definitions(tmp_path):
+    # Both used to parse to a bare module node: powershell names its functions in a
+    # `function_name` child that the identifier fallback did not recognise, and sql's DDL
+    # kinds were absent from the definition table. A deployment repo is mostly these two.
+    fp = ts.extract(_w(tmp_path / "deploy.ps1",
+        "function Deploy-Workspace { param($Name) Test-Workspace -Name $Name }\n"
+        "function Test-Workspace { param($Name) }\n"), "deploy.ps1")
+    assert {"Deploy-Workspace", "Test-Workspace"} <= {n["label"] for n in fp["nodes"]}
+    assert all(n["type"] == "function" for n in fp["nodes"] if n["label"].startswith("Deploy"))
+
+    fs = ts.extract(_w(tmp_path / "schema.sql",
+        "create table dbo.sales (id int);\n"
+        "create view dbo.sales_summary as select id from dbo.sales;\n"
+        "create procedure dbo.load as begin select 1 end;\n"), "schema.sql")
+    by_type = {n["type"]: n["label"] for n in fs["nodes"]}
+    assert by_type.get("table") == "dbo.sales"
+    assert by_type.get("view") == "dbo.sales_summary"
+    assert by_type.get("procedure") == "dbo.load"
+
+
 def test_unknown_extension_is_empty(tmp_path):
     assert ts.extract(_w(tmp_path / "x.unknownext", "stuff"), "x.unknownext") == {"nodes": [], "edges": []}
