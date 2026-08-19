@@ -31,7 +31,14 @@ TYPES = (
     "Notebook", "DataPipeline", "SemanticModel", "Report", "Lakehouse", "Warehouse",
     "Environment", "Dataflow", "SparkJobDefinition", "KQLDatabase", "KQLQueryset",
     "Eventhouse", "Eventstream", "MirroredDatabase", "MLModel", "MLExperiment",
+    "VariableLibrary", "DataAgent",
 )
+# Control-flow activities hold their children under a per-branch key, not a single one. The key
+# names the branch, so this is data too: If writes ifTrue/ifFalse, Switch writes defaultActivities
+# plus one plain `activities` per case, ForEach and Until write `activities`. A key missing here
+# is invisible twice over - the children are never emitted, and the parent inherits their
+# references, so the graph shows the container invoking what its branch actually invokes.
+_ACTIVITY_CONTAINERS = ("activities", "ifTrueActivities", "ifFalseActivities", "defaultActivities")
 # Activity type -> the reference field naming what it runs. Fabric writes the id most of the
 # time and the name in older exports, so both are accepted and resolved the same way.
 _INVOKE_KEYS = ("notebookId", "notebook", "pipelineId", "pipeline", "dataflowId", "dataflowName",
@@ -65,16 +72,17 @@ def _walk(root: Path):
 
 
 def _activities(obj):
-    """Fabric nests activities under properties.activities, and again inside ForEach/If."""
+    """Fabric nests activities under properties.activities, and again inside every control-flow
+    activity - each under its own branch key, see _ACTIVITY_CONTAINERS."""
     if isinstance(obj, dict):
-        acts = obj.get("activities")
-        if isinstance(acts, list):
+        nested = [v for k, v in obj.items() if k in _ACTIVITY_CONTAINERS and isinstance(v, list)]
+        for acts in nested:
             for a in acts:
                 if isinstance(a, dict):
                     yield a
                     yield from _activities(a)
         for v in obj.values():
-            if isinstance(v, (dict, list)) and v is not acts:
+            if isinstance(v, (dict, list)) and not any(v is n for n in nested):
                 yield from _activities(v)
     elif isinstance(obj, list):
         for v in obj:
@@ -89,9 +97,9 @@ def _refs(act: dict):
         if isinstance(o, dict):
             for k, v in o.items():
                 # Nested activities are activities in their own right and were already emitted
-                # with their own references; without this a ForEach claims to invoke whatever
-                # its children invoke.
-                if k == "activities":
+                # with their own references; without this a container claims to invoke whatever
+                # its children invoke. Every branch key counts, not just the plain one.
+                if k in _ACTIVITY_CONTAINERS:
                     continue
                 if k in _INVOKE_KEYS and isinstance(v, str) and v:
                     found.append(v)
