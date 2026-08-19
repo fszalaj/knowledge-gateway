@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from . import extract_ansible, extract_python, resolve, treesitter
+from . import extract_ansible, extract_fabric, extract_python, resolve, treesitter
 
 SCHEMA_VERSION = 1
 
@@ -58,7 +58,10 @@ def build_graph(root, languages: list[str] | None = None,
     resolver = resolve.ImportResolver(root, [r for _, r in py_files] + [r for _, r in ts_files])
 
     # Phase 2: extract (Ansible repo-level + Python ast + tree-sitter), resolving imports.
-    fragments: list[dict] = [extract_ansible.extract(root, excl, keep)]
+    # Both are repo-level passes: the relationships they emit live between files, not
+    # inside them, so neither can be driven by the per-file loops below.
+    fragments: list[dict] = [extract_ansible.extract(root, excl, keep),
+                             extract_fabric.extract(root, excl, keep)]
     n_py = n_ts = 0
     for p, rel in py_files:
         fragments.append(extract_python.extract(p, rel, resolver))
