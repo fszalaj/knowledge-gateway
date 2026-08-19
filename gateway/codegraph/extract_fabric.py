@@ -26,13 +26,28 @@ from pathlib import Path
 
 from .extract_ansible import skip_dir
 
-# Artifact folder suffixes Fabric writes. The suffix IS the type, so this list is data.
+# Artifact folder suffixes Fabric writes. The suffix IS the type, so this list is data: it is the
+# ItemType enum of the Fabric REST API, which is the `{display name}.{public facing type}` folder
+# name's second half. Kept alphabetical so it can be diffed against that list - a type missing
+# here is silent, the artifact simply never appears.
 TYPES = (
-    "Notebook", "DataPipeline", "SemanticModel", "Report", "Lakehouse", "Warehouse",
-    "Environment", "Dataflow", "SparkJobDefinition", "KQLDatabase", "KQLQueryset",
-    "Eventhouse", "Eventstream", "MirroredDatabase", "MLModel", "MLExperiment",
-    "VariableLibrary", "DataAgent",
+    "AnomalyDetector", "ApacheAirflowJob", "AppBackend", "AzureDatabricksStorage", "CopyJob",
+    "CosmosDBDatabase", "Dashboard", "DataAgent", "DataBuildToolJob", "DataPipeline",
+    "Dataflow", "Datamart", "DigitalTwinBuilder", "DigitalTwinBuilderFlow", "Environment",
+    "EventSchemaSet", "Eventhouse", "Eventstream", "GraphModel", "GraphQLApi", "GraphQuerySet",
+    "KQLDashboard", "KQLDatabase", "KQLQueryset", "Lakehouse", "MLExperiment", "MLModel", "Map",
+    "MirroredAzureDatabricksCatalog", "MirroredCatalog", "MirroredDatabase",
+    "MirroredWarehouse", "MountedDataFactory", "Notebook", "Ontology", "OperationsAgent",
+    "OrgApp", "OrgAppAudience", "PaginatedReport", "Plan", "Reflex", "Report", "SQLDatabase",
+    "SQLEndpoint", "SemanticModel", "SnowflakeDatabase", "SparkJobDefinition",
+    "UserDataFunction", "VariableLibrary", "Warehouse", "WarehouseSnapshot",
 )
+# A bare suffix is not enough evidence: plenty of repositories hold a `world.Map` or a `rollout.Plan`
+# that Fabric never wrote. Every real item directory carries a system file - .platform since v2, the
+# two files it replaced before that - so that file is what makes the directory an artifact.
+_V2_SYSTEM = ".platform"
+_V1_METADATA = "item.metadata.json"
+_V1_CONFIG = "item.config.json"
 # Control-flow activities hold their children under a per-branch key, not a single one. The key
 # names the branch, so this is data too: If writes ifTrue/ifFalse, Switch writes defaultActivities
 # plus one plain `activities` per case, ForEach and Until write `activities`. A key missing here
@@ -55,6 +70,16 @@ def _read_json(path: Path):
         return None
 
 
+def _identity(d: Path):
+    """Display name and logical id, from whichever system-file version wrote this directory."""
+    meta = _read_json(d / _V2_SYSTEM)
+    if meta is None:
+        meta = {"metadata": _read_json(d / _V1_METADATA) or {},
+                "config": _read_json(d / _V1_CONFIG) or {}}
+    display = (meta.get("metadata") or {}).get("displayName") or d.name.rsplit(".", 1)[0]
+    return display, (meta.get("config") or {}).get("logicalId")
+
+
 def _artifact_dirs(root: Path, excl: frozenset[str], keep: frozenset[str]):
     """Every directory whose name ends in a known Fabric type suffix."""
     for dirpath, dirnames, _ in root.walk() if hasattr(root, "walk") else _walk(root):
@@ -62,7 +87,9 @@ def _artifact_dirs(root: Path, excl: frozenset[str], keep: frozenset[str]):
         for d in list(dirnames):
             name = d
             if "." in name and name.rsplit(".", 1)[1] in TYPES:
-                yield Path(dirpath) / d
+                p = Path(dirpath) / d
+                if (p / _V2_SYSTEM).exists() or (p / _V1_METADATA).exists():
+                    yield p
 
 
 def _walk(root: Path):
@@ -134,9 +161,7 @@ def extract(root: Path, exclude: frozenset[str] = frozenset(),
     for d in artifacts:
         rel = d.relative_to(root).as_posix()
         atype = d.name.rsplit(".", 1)[1]
-        meta = _read_json(d / ".platform") or {}
-        display = (meta.get("metadata") or {}).get("displayName") or d.name.rsplit(".", 1)[0]
-        logical = (meta.get("config") or {}).get("logicalId")
+        display, logical = _identity(d)
         nid = add(f"fabric:{atype}:{display}", label=display, type=atype.lower(),
                   file_type="fabric", source_file=rel, logical_id=logical)
         by_ref[display] = nid
@@ -154,8 +179,7 @@ def extract(root: Path, exclude: frozenset[str] = frozenset(),
     for d in artifacts:
         rel = d.relative_to(root).as_posix()
         atype = d.name.rsplit(".", 1)[1]
-        meta = _read_json(d / ".platform") or {}
-        display = (meta.get("metadata") or {}).get("displayName") or d.name.rsplit(".", 1)[0]
+        display, _ = _identity(d)
         nid = f"fabric:{atype}:{display}"
         model = display  # child ids read `fabrictable:<model>/<table>`, not the full node id
 

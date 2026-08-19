@@ -160,6 +160,33 @@ def test_variable_library_and_data_agent_are_artifacts(tmp_path):
     assert {"fabric:VariableLibrary:SalesVars", "fabric:DataAgent:SalesAgent"} <= nodes
 
 
+def test_a_known_suffix_without_a_system_file_is_not_an_artifact(tmp_path):
+    # The type list is broad on purpose, and several entries are ordinary words. Fabric always
+    # writes a system file beside the definition, so that file - not the suffix - is the evidence.
+    _mk(tmp_path, "world.Map/tiles.json", "{}")
+    _mk(tmp_path, "rollout.Plan/README.md", "not a workspace\n")
+    assert extract_fabric.extract(tmp_path) == {"nodes": [], "edges": []}
+
+
+def test_version_1_system_files_still_identify_an_artifact(tmp_path):
+    # Before .platform, the same two fields lived in item.metadata.json and item.config.json.
+    # Reading only the newer file leaves the display name to the folder and the logical id
+    # unknown, and every reference written as an id stops resolving.
+    _mk(tmp_path, "Legacy.Notebook/item.metadata.json", json.dumps(
+        {"type": "Notebook", "displayName": "LoadSales"}))
+    _mk(tmp_path, "Legacy.Notebook/item.config.json", json.dumps(
+        {"version": "1.0", "logicalId": "33333333-3333-3333-3333-333333333333"}))
+    _mk(tmp_path, "Sales.DataPipeline/.platform", json.dumps(
+        {"metadata": {"type": "DataPipeline", "displayName": "Sales"}}))
+    _mk(tmp_path, "Sales.DataPipeline/pipeline-content.json", json.dumps({"properties": {"activities": [
+        {"name": "Run notebook", "type": "TridentNotebook",
+         "typeProperties": {"notebookId": "33333333-3333-3333-3333-333333333333"}}]}}))
+    nodes, edges = _index(extract_fabric.extract(tmp_path))
+    # The display name wins over the folder stem, which is what the id resolves to.
+    assert "fabric:Notebook:LoadSales" in nodes
+    assert ("fabricactivity:Sales/Run notebook", "invokes", "fabric:Notebook:LoadSales") in edges
+
+
 def test_repo_without_fabric_artifacts_is_empty(tmp_path):
     _mk(tmp_path, "src/app.py", "x = 1\n")
     assert extract_fabric.extract(tmp_path) == {"nodes": [], "edges": []}
