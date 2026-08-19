@@ -2,7 +2,7 @@
 
 <!-- mcp-name: io.github.fszalaj/knowledge-gateway -->
 
-A single MCP server that gives agents (Claude Code, Codex, Cursor, Gemini, Copilot, Antigravity)
+A single MCP server that gives agents (Claude Code, Codex, Cursor, Copilot, Antigravity)
 three capabilities over one connection:
 
 - **Vault** - read, search, and **edit** a git-backed Markdown/Obsidian vault (no Obsidian GUI), git as the source of truth.
@@ -25,17 +25,15 @@ flowchart LR
     subgraph clients [Agents]
         A1[Claude Code]
         A2[Codex]
-        A3[Gemini]
-        A4[Copilot - VS Code]
-        A5[Cursor]
-        A6[Antigravity]
+        A3[Copilot - VS Code]
+        A4[Cursor]
+        A5[Antigravity - Gemini]
     end
     A1 --- M(( MCP ))
     A2 --- M
     A3 --- M
     A4 --- M
     A5 --- M
-    A6 --- M
     M -->|stdio, per repo, no auth| L[Local gateway]
     M -->|HTTP + bearer + ACL| S[Shared gateway]
     L --> V[/Vault: Markdown files/]
@@ -212,10 +210,31 @@ pull a materially larger, native-extension dependency tree:
 
 | Install | What you get |
 |---|---|
-| `[graph]` | the code graph and its query tools, over **every supported language**: a tree-sitter pass across ~30 grammars (JS/TS/TSX, Go, Rust, Java, C#, C/C++, Ruby, PHP, bash, PowerShell, Terraform/HCL, Lua, Kotlin, Swift, Scala, R, Perl, Elixir, Clojure, Dart, SQL, Groovy, Julia, Solidity, Haskell, OCaml) plus Python via the stdlib `ast` and a dedicated Ansible pass |
+| `[graph]` | the code graph and its query tools, over **every supported language**: a tree-sitter pass across ~30 grammars (JS/TS/TSX, Go, Rust, Java, C#, C/C++, Ruby, PHP, bash, PowerShell, Terraform/HCL, Lua, Kotlin, Swift, Scala, R, Perl, Elixir, Clojure, Dart, SQL, Groovy, Julia, Solidity, Haskell, OCaml) plus Python via the stdlib `ast` and a dedicated Ansible pass, plus dedicated Ansible and Microsoft Fabric passes |
 | `[graph-slim]` | the same tools with **only** the two dependency-free extractors, Python and Ansible. Pick this only when the target really is Python/Ansible and the parser pack is not worth its size |
 | `[graph-all]` | alias of `[graph]`, kept so older pins keep resolving |
 | `[convert]` | attachment -> Markdown via MarkItDown; opt-in PDF and Office parsers add a materially larger dependency tree, including native-extension packages |
+
+### Microsoft Fabric
+
+A git-integrated Fabric workspace is mostly JSON and TMDL. Parsing that as *JSON* would emit a node
+per key and answer nothing, so there is a dedicated pass that reads the shapes Fabric writes:
+
+| Read | Emitted |
+|---|---|
+| `<Name>.<Type>/.platform` | `fabric:<Type>:<displayName>` - identity from the descriptor, including `logicalId` |
+| `<Name>.DataPipeline/pipeline-content.json` | one node per activity (nested `ForEach`/`If` included), `depends_on` for order, `invokes` for what each one runs |
+| `<Name>.SemanticModel/definition/**/*.tmdl` | tables and the measures under them |
+| `<Name>.Report/definition.pbir` | `reads_model` -> the semantic model |
+| `<Name>.Notebook/notebook-content.py` | `implemented_by` -> the `module:` node the Python pass produced |
+
+That last edge is the point: it joins the artifact map to the code graph, so "what breaks if I
+change this notebook" is one query rather than two graphs and a guess. References resolve by
+logical id where Fabric writes one and by display name where it does not - both occur in real
+exports.
+
+Deliberately absent: notebook -> lakehouse table lineage. That needs heuristics over Spark code
+rather than structure, and a wrong guess there is an edge that looks authoritative and is not.
 
 **Build a graph** (AST-only - local, no network, no LLM) where the code lives:
 
