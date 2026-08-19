@@ -214,6 +214,7 @@ pull a materially larger, native-extension dependency tree:
 | `[graph-slim]` | the same tools with **only** the two dependency-free extractors, Python and Ansible. Pick this only when the target really is Python/Ansible and the parser pack is not worth its size |
 | `[graph-all]` | alias of `[graph]`, kept so older pins keep resolving |
 | `[convert]` | attachment -> Markdown via MarkItDown; opt-in PDF and Office parsers add a materially larger dependency tree, including native-extension packages |
+| `[all]` | `[graph]` + `[convert]` in one pin - the whole toolset, and the string to use when a config should not drift apart from what the CLI has installed |
 
 ### Microsoft Fabric
 
