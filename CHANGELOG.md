@@ -5,6 +5,37 @@ All notable changes to knowledge-gateway. Consumers track the **PyPI** package
 per-repo re-pin). The `stable` git branch is a permanent alias for the same release, for
 pinning straight from git. Every release is also an immutable `vX.Y.Z` tag for pinning/audit.
 
+## v0.11.0 - 2026-08-19
+
+### Fixed
+- **Fabric: the activities inside control-flow branches were invisible.** Only `ForEach` and
+  `Until` put their children under a plain `activities` list; `IfCondition` writes
+  `ifTrueActivities` / `ifFalseActivities` and `Switch` writes `defaultActivities`. Everything in
+  those branches was missing - no node, no `contains` edge, none of its own references. The second
+  half was worse than the omission: the reference walker skipped only the one key it knew, so a
+  loop or a condition was credited with the reference of the child it was hiding, and the graph
+  claimed the container invoked the pipeline. That is a different statement about when the work
+  runs, and it looks correct until you open the JSON. Both follow from one table of branch keys,
+  now shared by the activity walker and the reference walker. On a real git-integrated workspace
+  this recovered 16% of the activities and moved five `invokes` edges onto the activity that
+  actually makes the call.
+
+### Added
+- **Fabric: the whole `ItemType` list.** The extractor knew 16 of the 51 item types the Fabric
+  REST API defines, so a workspace using any of the other 35 silently reported fewer artifacts
+  than it has. The list is now the full enum, kept alphabetical so it can be diffed against the
+  source it came from.
+- **Fabric: v1 system files are read.** `item.metadata.json` and `item.config.json` are accepted
+  alongside `.platform`, so a repository written before the format changed gets its recorded
+  display name and logical id instead of a guess from the folder stem - which is also what makes
+  its id-based references resolve.
+
+### Changed
+- **A Fabric artifact now needs a system file, not just a folder suffix.** Several item types are
+  ordinary words - `Map`, `Plan`, `Ontology`, `Report` - so with the full type list a suffix match
+  alone would claim a `world.Map` in a game repository or a `rollout.Plan` in any repository at
+  all. Every real item directory carries `.platform` or the v1 pair, so that file is the evidence.
+
 ## v0.10.0 - 2026-08-19
 
 ### Added
