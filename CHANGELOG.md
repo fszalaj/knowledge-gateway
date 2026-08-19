@@ -5,6 +5,24 @@ All notable changes to knowledge-gateway. Consumers track the **PyPI** package
 per-repo re-pin). The `stable` git branch is a permanent alias for the same release, for
 pinning straight from git. Every release is also an immutable `vX.Y.Z` tag for pinning/audit.
 
+## v0.10.0 - 2026-08-19
+
+### Added
+- **Microsoft Fabric extractor.** A git-integrated Fabric workspace is mostly JSON and TMDL, and
+  the graph saw none of it; adding JSON as a language would have emitted a node per key and
+  answered nothing. The new repo-level pass reads `.platform` descriptors for artifact identity,
+  `pipeline-content.json` for activities and their order, TMDL for tables and measures, and the
+  report's dataset reference - then links each artifact to the `module:` node the Python pass
+  already produced for its notebook code, which is what joins the artifact map to the code graph.
+  References resolve by logical id or display name, because real exports use both.
+
+### Fixed
+- **PowerShell functions and SQL DDL are extracted.** Both languages parsed already, yet a `.ps1`
+  or `.sql` file produced a bare `module:` node with nothing under it - indistinguishable, from
+  the outside, from "this tool only handles Python and Ansible". PowerShell names functions in a
+  dedicated node the name resolver did not know, and SQL's `create_table` / `create_view` /
+  `create_procedure` kinds were missing from the definition table.
+
 ## v0.9.0 - 2026-08-18
 
 ### Changed
