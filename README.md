@@ -2,7 +2,7 @@
 
 <!-- mcp-name: io.github.fszalaj/knowledge-gateway -->
 
-A single MCP server that gives agents (Claude Code, Codex, Cursor, Gemini, Copilot, Antigravity)
+A single MCP server that gives agents (Claude Code, Codex, Cursor, Copilot, Antigravity)
 three capabilities over one connection:
 
 - **Vault** - read, search, and **edit** a git-backed Markdown/Obsidian vault (no Obsidian GUI), git as the source of truth.
@@ -25,17 +25,15 @@ flowchart LR
     subgraph clients [Agents]
         A1[Claude Code]
         A2[Codex]
-        A3[Gemini]
-        A4[Copilot - VS Code]
-        A5[Cursor]
-        A6[Antigravity]
+        A3[Copilot - VS Code]
+        A4[Cursor]
+        A5[Antigravity - Gemini]
     end
     A1 --- M(( MCP ))
     A2 --- M
     A3 --- M
     A4 --- M
     A5 --- M
-    A6 --- M
     M -->|stdio, per repo, no auth| L[Local gateway]
     M -->|HTTP + bearer + ACL| S[Shared gateway]
     L --> V[/Vault: Markdown files/]
