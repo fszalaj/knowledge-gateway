@@ -5,6 +5,14 @@ All notable changes to knowledge-gateway. Consumers track the **PyPI** package
 per-repo re-pin). The `stable` git branch is a permanent alias for the same release, for
 pinning straight from git. Every release is also an immutable `vX.Y.Z` tag for pinning/audit.
 
+## Unreleased
+
+### Changed
+- **Agent guidance: a session-harness reference and a `CLAUDE.md` alias.** `AGENTS.md` now points
+  substantive work at the installed personal `session-harness` skill, records where this
+  repository's durable context and handoffs live, and `CLAUDE.md` is a relative symlink to it, so
+  Claude Code loads the same contract that Codex, Copilot and Cursor already read.
+
 ## v0.11.0 - 2026-08-19
 
 ### Fixed
