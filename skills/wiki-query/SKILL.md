@@ -18,7 +18,8 @@ Use the vault as the first source of durable project context. This is a read-onl
    - `list_tags` to discover the vault taxonomy.
 4. Read the smallest set of load-bearing notes with `read_note`.
 5. Reconcile dates, status, superseding decisions, and links. Prefer active/current notes over archived or explicitly stale content.
-6. Answer with traceable references using vault-relative paths or `[[wikilinks]]`.
+6. When the documented state may be stale, check live evidence such as Git history, the issue tracker, or the deployment before relying on it, and use the project's code graph (`code-graph-explore`) for structural source questions. Distinguish documented decisions, current observations, and inference.
+7. Answer with traceable references using vault-relative paths or `[[wikilinks]]`.
 
 ## Rules
 
@@ -26,4 +27,5 @@ Use the vault as the first source of durable project context. This is a read-onl
 - Distinguish facts stated in the vault from inference based on several pages.
 - If notes conflict, report the conflict and each note's status/date.
 - If the vault is insufficient, say what was searched and which evidence is missing. Then inspect code or external sources only when the task allows it.
+- Reuse vault context already read in this session unless the note changed; do not re-read the whole vault for every question.
 - Do not write during query-only work. Hand durable new findings to `wiki-curate`.

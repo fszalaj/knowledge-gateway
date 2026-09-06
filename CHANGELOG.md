@@ -12,6 +12,11 @@ pinning straight from git. Every release is also an immutable `vX.Y.Z` tag for p
   substantive work at the installed personal `session-harness` skill, records where this
   repository's durable context and handoffs live, and `CLAUDE.md` is a relative symlink to it, so
   Claude Code loads the same contract that Codex, Copilot and Cursor already read.
+- **Skills: field-tested guidance folded back into `wiki-query`, `wiki-curate` and `wiki-lint`.**
+  Verify possibly stale vault state against live evidence and the code graph, re-read a page right
+  before patching it, keep `created`/`updated` semantics, fix only the failures a batch introduced,
+  keep derived `.graph/` snapshots out of vault history, and report the deterministic gate apart
+  from the manual checks.
 
 ## v0.11.0 - 2026-08-19
 
