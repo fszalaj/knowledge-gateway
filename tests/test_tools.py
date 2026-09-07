@@ -226,3 +226,16 @@ async def test_graph_build_writes_provenance_that_graph_stats_reports(server, gi
     assert prov["status"] == "ok" and prov["snapshot_matches"] is True
     assert prov["source_root"] == "tree" and prov["builder"].startswith("knowledge-gateway ")
     assert [g["provenance"] for g in listed.data if g["name"] == "kg"] == ["ok"]
+
+
+async def test_rename_counts_a_symlinked_note_once(server, git_vault):
+    # safe_note_path resolves a vault-internal symlink, so the link and its target were the
+    # same file twice: written twice and counted twice, reporting more rewrites than happened.
+    (git_vault / "Link.md").symlink_to(git_vault / "Alpha.md")
+    async with Client(server) as c:
+        r = await c.call_tool("rename_note",
+                              {"vault": git_vault.name, "old_path": "Beta.md", "new_path": "Gamma.md"})
+    assert r.data["files"] == ["Alpha.md"]
+    assert r.data["links_updated"] == 3            # [[Beta]], [[beta#h]], ![[Beta]] - once each
+    assert (git_vault / "Link.md").is_symlink()
+    assert "[[Gamma]]" in (git_vault / "Alpha.md").read_text()

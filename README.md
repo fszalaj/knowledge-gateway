@@ -127,7 +127,7 @@ Open the repo in your agent, approve the `wiki` server once, done.
 | `list_vaults` | vaults reachable here |
 | `list_notes` | Markdown paths in a vault |
 | `read_note` | raw note content |
-| `list_attachments` / `read_attachment` | list / read binary attachments (image -> inline Image, else File) |
+| `list_attachments` / `read_attachment` | list / read binary attachments (image -> inline Image, else an embedded resource carrying the file's real media type) |
 | `list_canvases` / `read_canvas` / `write_canvas` | list / read / write Obsidian Canvas (nodes, groups, colors) |
 | `search` | ripgrep literal/regex full-text |
 | `backlinks` | notes that `[[wikilink]]` to a note |
@@ -245,10 +245,10 @@ knowledge-gateway-graph /path/to/code-repo -o /path/to/vault/.graph/myrepo.json
 ```
 
 Both write a `<name>.meta.yaml` sidecar beside the snapshot: the source revision, the build
-time and the snapshot's SHA-256. A graph is a snapshot and cannot refuse to be stale, so
-`graph_stats` and `list_graphs` hand that provenance back with every answer - including
-`snapshot_matches`, which turns false if the snapshot changed after its manifest was written.
-The sidecar holds no absolute path, only the source directory's basename.
+time and the snapshot's SHA-256. A graph is a snapshot and cannot refuse to be stale, so that
+provenance travels with the answer - `list_graphs` carries each snapshot's revision and build
+time, and `graph_stats` adds `snapshot_matches`, false when the snapshot changed after its
+manifest was written. The sidecar holds no absolute path, only the source directory's basename.
 
 Hidden directories (`.git`, `.next`, `.venv`, caches, ...) and common build/vendor output
 (`node_modules`, `dist`, `build`, `target`, `vendor`, ...) are always skipped.

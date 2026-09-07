@@ -22,6 +22,8 @@ from pathlib import Path
 
 import yaml
 
+from .writes import atomic_write
+
 SUFFIX = ".meta.yaml"
 SCHEMA_VERSION = 1
 
@@ -40,13 +42,27 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def _git(source: Path, *args: str) -> str | None:
+def _git(source: Path, *args: str, timeout: int = 30) -> str | None:
+    """Probe a source tree. None when git is absent, failed, or had to be stopped."""
     try:
-        proc = subprocess.run(["git", "-C", str(source), *args],
-                              capture_output=True, text=True, timeout=30)
-    except (OSError, subprocess.SubprocessError):  # no git, or it hung
+        proc = subprocess.Popen(["git", "-C", str(source), *args],
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    except OSError:  # git is not installed
         return None
-    return proc.stdout.strip() if proc.returncode == 0 else None
+    try:
+        out, _ = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        # SIGTERM first: this runs against the user's own repository, and the SIGKILL a
+        # plain timeout sends would leave .git/index.lock behind - the same bug this
+        # package fixed in gitops._git.
+        proc.terminate()
+        try:
+            proc.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.communicate()
+        return None
+    return out.strip() if proc.returncode == 0 else None
 
 
 def source_revision(source: Path) -> tuple[str | None, bool | None]:
@@ -76,19 +92,25 @@ def write(snapshot: Path, graph_meta: dict, source: Path, builder_version: str,
         },
     }
     out = path_for(snapshot)
-    out.write_text(yaml.safe_dump(doc, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    atomic_write(out, yaml.safe_dump(doc, sort_keys=False, allow_unicode=True))
     return out
 
 
-def read(snapshot: Path) -> dict:
+def read(snapshot: Path, contain_to: Path | None = None) -> dict:
     """Provenance for `snapshot`, always with a `status`: `ok`, `missing` or `unreadable`.
 
     `ok` also carries `snapshot_matches`: False means the snapshot changed after the manifest
     was written, which is exactly the case a caller must not mistake for a fresh graph.
+
+    `contain_to` is the root the sidecar must resolve inside. The snapshot is contained by the
+    caller, but its sidecar is a sibling path that could be a symlink pointing out of the
+    vault, and what it holds is returned to clients.
     """
     p = path_for(snapshot)
     if not p.is_file():
         return {"status": "missing"}
+    if contain_to is not None and not p.resolve().is_relative_to(Path(contain_to).resolve()):
+        return {"status": "unreadable"}
     try:
         doc = yaml.safe_load(p.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, yaml.YAMLError):

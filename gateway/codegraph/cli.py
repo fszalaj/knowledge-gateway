@@ -41,7 +41,8 @@ def main(argv: list[str] | None = None) -> int:
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     from .. import __version__, manifest
-    side = manifest.write(out, data.get("graph", {}), Path(args.source), __version__)
+    # resolve: for `knowledge-gateway-graph .` the raw argument's basename is empty
+    side = manifest.write(out, data.get("graph", {}), Path(args.source).resolve(), __version__)
     g = data.get("graph", {})
     print(f"built: {g.get('node_count')} nodes, {g.get('edge_count')} edges, "
           f"{g.get('communities')} communities (tree-sitter: {g.get('treesitter_available')}) -> {out}")

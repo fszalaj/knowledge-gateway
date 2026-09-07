@@ -98,3 +98,43 @@ def test_a_hand_written_manifest_is_normalised_before_it_leaves(tmp_path):
     assert isinstance(prov["builder"], str) and "hand" in prov["builder"]
     assert prov["revision"] == "abc123" and prov["dirty"] is True
     assert prov["snapshot_matches"] is True
+
+
+def test_cli_records_the_real_directory_name_for_a_relative_source(tmp_path, monkeypatch):
+    # `knowledge-gateway-graph .` must not record a source root of "."
+    from gateway.codegraph import cli
+    src = tmp_path / "myrepo"
+    src.mkdir()
+    (src / "a.py").write_text("x = 1\n", encoding="utf-8")
+    out = tmp_path / "out" / "g.json"
+    monkeypatch.chdir(src)
+    assert cli.main([".", "-o", str(out)]) == 0
+    assert manifest.read(out)["source_root"] == "myrepo"
+
+
+def test_a_sidecar_symlinked_out_of_the_vault_is_not_read(tmp_path):
+    vault, snap, _ = _built(tmp_path)
+    outside = tmp_path / "elsewhere.meta.yaml"
+    outside.write_text("source:\n  revision: leaked\n", encoding="utf-8")
+    side = manifest.path_for(snap)
+    side.unlink()
+    side.symlink_to(outside)
+    assert manifest.read(snap, contain_to=vault)["status"] == "unreadable"
+    assert graphmod.stats(vault, "default")["provenance"]["status"] == "unreadable"
+    assert manifest.read(snap)["revision"] == "leaked"   # only the containment check stops it
+
+
+def test_git_probe_asks_git_to_stop_before_killing_it(tmp_path, monkeypatch):
+    # The same SIGKILL hazard this package fixed in gitops, and this one runs against the
+    # user's own repository.
+    import os
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    marker = tmp_path / "term"
+    stub = bin_dir / "git"
+    stub.write_text(f'#!/bin/sh\ntrap "echo yes > {marker}; exit 143" TERM\n'
+                    'i=0\nwhile [ $i -lt 300 ]; do sleep 0.1; i=$((i+1)); done\n')
+    stub.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
+    assert manifest._git(tmp_path, "rev-parse", "HEAD", timeout=1) is None
+    assert marker.read_text().strip() == "yes"

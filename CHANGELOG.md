@@ -12,9 +12,10 @@ pinning straight from git. Every release is also an immutable `vX.Y.Z` tag for p
   write a `<name>.meta.yaml` sidecar - source revision, build time, builder version and the
   snapshot's SHA-256 - and `graph_stats` and `list_graphs` return it with every answer. A graph
   is a snapshot: it cannot refuse to be stale, and the reader had no way to tell a fresh one
-  from a snapshot of a revision that no longer exists. `snapshot_matches` turns false when the
-  snapshot changed after its manifest was written, and a missing or unreadable manifest is
-  reported as such rather than silently omitted. The sidecar records the source directory's
+  from a snapshot of a revision that no longer exists. `list_graphs` carries each snapshot's
+  revision and build time; `graph_stats` adds `snapshot_matches`, false when the snapshot
+  changed after its manifest was written, and reports a missing or unreadable manifest as such
+  rather than omitting it, which would read as "no problem". The sidecar records the source directory's
   basename, never an absolute path, because these fields reach clients in shared mode.
 
 ### Changed
@@ -27,6 +28,24 @@ pinning straight from git. Every release is also an immutable `vX.Y.Z` tag for p
   before patching it, keep `created`/`updated` semantics, fix only the failures a batch introduced,
   keep derived `.graph/` snapshots out of vault history, and report the deterministic gate apart
   from the manual checks.
+
+- **Skill and deploy text caught up with the v0.9.0 extras swap.** `gateway-setup` and
+  `code-graph-build` still described `[graph]` as the Python/Ansible profile and
+  `[graph-all]` as the broad one; `[graph]` has been the broad profile since v0.9.0 and
+  `[graph-slim]` is the narrow one. `code-graph-explore` gained the Fabric node ids and
+  relations, `gateway-operations` now describes the updater and the automated release the
+  repository actually has, and the deploy units name PyPI rather than `@stable`.
+- **`code-graph-build` says how to compare a rebuild with the snapshot it replaces.** Node ids
+  carry `#L<line>`, so one inserted line renumbers everything below it and a substring match on
+  a name like `page` hits half a repository - two ways for a validation step to report a
+  confident, wrong verdict about a rebuild.
+- **`gateway.server.repo_layout` is a function.** The vault/repository layout detection was
+  inline in `build_local_server`, where nothing could observe it: `git -C <vault>` reaches the
+  same repository either way, so its tests could only assert that a server object exists.
+- **Dead code removed**, as reported by the audit: `graph.graph_dir`, the unused `context`
+  parameter of the ripgrep wrapper (a no-op even when passed), and the async branch of the
+  error-mapping decorator, which no tool used - a test now fails if a tool ever becomes async.
+  The uninstalled-source version fallback says `0+unknown` instead of the long-deleted `0.2.0`.
 
 ### Fixed
 - **`patch_note` could destroy a note's frontmatter.** A note whose closing `---` sits at
@@ -81,8 +100,11 @@ pinning straight from git. Every release is also an immutable `vX.Y.Z` tag for p
   the centre node alone; the parameter is now an enum in the tool schema.
 - **`read_attachment` reports the file's real media type.** Everything that is not an image
   arrived as `application/<extension>` - a `.mp3` as `application/mp3` - and its resource URI
-  repeated the extension (`song.mp3.mp3`). The type is now derived from the filename, and the
-  URI is the bare filename rather than the server's absolute path.
+  repeated the extension (`song.mp3.mp3`). The type is now derived from the filename; the
+  resource URI is the bare filename, as it was before - it never carried a server path.
+- **`rename_note` counts a symlinked note once.** A vault-internal symlink resolves to the
+  note it points at, so that note was rewritten twice and counted twice, reporting more link
+  rewrites than actually happened.
 - **Ansible tasks inside `block` / `rescue` / `always` are their own nodes.** Nested task lists
   restart at index 0, so a block's first task and the file's first task shared an id whenever
   they shared a name, and two tasks collapsed into one. `include_tasks` targets are normalised
@@ -94,25 +116,6 @@ pinning straight from git. Every release is also an immutable `vX.Y.Z` tag for p
 - **`server.json` was two releases behind** (0.9.0 against a 0.11.0 package), pointing MCP
   Registry clients at a version without the Fabric pass. A test now fails when the
   manifest and the package disagree, since the bump is a manual release step.
-
-### Changed
-- **Skill and deploy text caught up with the v0.9.0 extras swap.** `gateway-setup` and
-  `code-graph-build` still described `[graph]` as the Python/Ansible profile and
-  `[graph-all]` as the broad one; `[graph]` has been the broad profile since v0.9.0 and
-  `[graph-slim]` is the narrow one. `code-graph-explore` gained the Fabric node ids and
-  relations, `gateway-operations` now describes the updater and the automated release the
-  repository actually has, and the deploy units name PyPI rather than `@stable`.
-- **`code-graph-build` says how to compare a rebuild with the snapshot it replaces.** Node ids
-  carry `#L<line>`, so one inserted line renumbers everything below it and a substring match on
-  a name like `page` hits half a repository - two ways for a validation step to report a
-  confident, wrong verdict about a rebuild.
-- **`gateway.server.repo_layout` is a function.** The vault/repository layout detection was
-  inline in `build_local_server`, where nothing could observe it: `git -C <vault>` reaches the
-  same repository either way, so its tests could only assert that a server object exists.
-- **Dead code removed**, as reported by the audit: `graph.graph_dir`, the unused `context`
-  parameter of the ripgrep wrapper (a no-op even when passed), and the async branch of the
-  error-mapping decorator, which no tool used - a test now fails if a tool ever becomes async.
-  The uninstalled-source version fallback says `0+unknown` instead of the long-deleted `0.2.0`.
 
 ## v0.11.0 - 2026-08-19
 

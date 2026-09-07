@@ -453,6 +453,8 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
             for rel in all_notes:
                 if rel.startswith("_templates/") or "/_templates/" in rel:
                     continue
+                if (v.path / rel).is_symlink():
+                    continue  # writing through it would replace the link with a file
                 try:
                     # Same guard as query_notes: one escaping symlink or non-UTF-8 note
                     # must not abort a rename across the whole vault.

@@ -55,7 +55,7 @@ def list_graphs(vault_path: Path) -> list[dict]:
             meta = g.get("graph", {}) if isinstance(g, dict) else {}
         except Exception:
             meta = {}
-        prov = manifest.read(p)
+        prov = manifest.read(p, contain_to=base)
         out.append({"name": p.stem, "nodes": meta.get("node_count"),
                     "edges": meta.get("edge_count"), "communities": meta.get("communities"),
                     "revision": prov.get("revision"), "built_at": prov.get("built_at"),
@@ -157,4 +157,4 @@ def stats(vault_path: Path, name: str) -> dict:
     if not isinstance(data, dict) or not isinstance(data.get("nodes"), list) or not isinstance(data.get("links"), list):
         raise ValueError(f"graph_invalid: {name}: not a node-link graph")
     # A snapshot cannot refuse to be stale, so what it was built from travels with it.
-    return {**data.get("graph", {}), "provenance": manifest.read(p)}
+    return {**data.get("graph", {}), "provenance": manifest.read(p, contain_to=Path(vault_path))}
