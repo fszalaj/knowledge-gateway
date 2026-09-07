@@ -40,6 +40,15 @@ def build_graph(root, languages: list[str] | None = None,
     root = Path(root).resolve()
     if not root.is_dir():
         raise FileNotFoundError(f"not_found: {root}")
+    # Validate here, not in the CLI: graph_build reaches this function directly, and a
+    # name that matches nothing would silently write a graph missing that whole language.
+    # The Python and Ansible passes always run, but naming them is a legitimate way to
+    # say "no tree-sitter languages", so they are valid values rather than an error.
+    known = sorted(set(treesitter.EXT_LANG.values()) | {"python", "ansible"})
+    unknown = sorted(set(languages or ()) - set(known))
+    if unknown:
+        raise ValueError(f"graph_invalid: unknown language(s) {', '.join(unknown)}; "
+                         f"choose from: {', '.join(known)}")
     excl = frozenset(exclude or ())
     keep = frozenset(include or ())
 

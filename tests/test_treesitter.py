@@ -1,4 +1,4 @@
-"""Broad-language tree-sitter pass (the [graph-all] extra).
+"""Broad-language tree-sitter pass (in the [graph] extra).
 
 Regression guard: this pass was once silently broken (it threw on every file and the
 error was swallowed -> zero nodes). These tests fail loudly if extraction stops working.
@@ -69,3 +69,31 @@ def test_powershell_and_sql_definitions(tmp_path):
 
 def test_unknown_extension_is_empty(tmp_path):
     assert ts.extract(_w(tmp_path / "x.unknownext", "stuff"), "x.unknownext") == {"nodes": [], "edges": []}
+
+
+def test_cli_rejects_unknown_language_names(tmp_path):
+    # `--languages js ts` are extensions, not tree-sitter language names: accepting them
+    # silently produced a graph with every JS/TS file dropped.
+    from gateway.codegraph import cli
+    (tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        cli.main([str(tmp_path), "-o", str(tmp_path / "g.json"), "--languages", "js", "ts"])
+    assert cli.main([str(tmp_path), "-o", str(tmp_path / "g.json"), "--languages", "javascript"]) == 0
+
+
+def test_graph_build_rejects_unknown_language_names(tmp_path):
+    # The MCP graph_build path calls build_graph directly, so the check cannot live in the CLI.
+    from gateway.codegraph import build_graph
+    (tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="graph_invalid: unknown language"):
+        build_graph(tmp_path, languages=["js"])
+
+
+def test_cli_writes_the_provenance_sidecar(tmp_path):
+    from gateway import manifest
+    from gateway.codegraph import cli
+    (tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
+    out = tmp_path / "g" / "graph.json"
+    assert cli.main([str(tmp_path), "-o", str(out)]) == 0
+    prov = manifest.read(out)
+    assert prov["status"] == "ok" and prov["snapshot_matches"] is True

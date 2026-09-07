@@ -9,6 +9,12 @@ This repository is a security-sensitive Python/FastMCP service. Treat the vault 
 3. Build or refresh a local code graph before broad refactors when the `[graph]` or `[graph-all]` extra is available.
 4. Keep changes narrow. Do not combine unrelated refactors, dependency upgrades, and documentation changes.
 
+## Session harness
+
+For substantive planning, implementation and review, use the installed personal `session-harness` skill at `~/.agents/skills/session-harness/SKILL.md` when it is present; this repository does not maintain a project copy. Honor its usage and context safeguards, prefer native same-family workers, and obtain independent reviews from the other two provider families when supported. Leaf assignments and trivial edits do not restart orchestration. Without the harness, this file and `docs/agent-skills.md` remain the complete contract.
+
+Durable context: `README.md` is the entry point, this file is the engineering contract, `CHANGELOG.md` records user-visible decisions, and the pull request carries the session handoff. The repository has no vault of its own; build its graph with `knowledge-gateway-graph . -o <vault>/.graph/knowledge-gateway.json` and query it through `code-graph-explore` and `code-impact`.
+
 ## Required engineering practices
 
 - Work on a short-lived branch and open a pull request. Do not push directly to `main` or move `stable` as part of ordinary development.

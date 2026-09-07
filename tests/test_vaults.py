@@ -110,3 +110,14 @@ def test_list_markdown_skips_hidden_notes(tmp_path):
     v = make_vault(tmp_path)
     (tmp_path / ".secret.md").write_text("x\n")
     assert all(not n.split("/")[-1].startswith(".") for n in v.list_markdown())
+
+
+def test_convert_allowlist_covers_the_documented_document_types(tmp_path):
+    # The negative test alone would still pass if the allowlist lost PDF or Office.
+    v = Vault(name="v", path=tmp_path, repo_root=tmp_path, subdir=".")
+    for name in ("doc.pdf", "sheet.xlsx", "deck.pptx", "letter.docx", "page.html", "rows.csv", "pic.png"):
+        (tmp_path / name).write_bytes(b"x")
+        assert v.safe_convert_path(name).name == name
+    (tmp_path / "creds.yaml").write_text("t: 1\n")
+    with pytest.raises(PermissionError, match="not_convertible"):
+        v.safe_convert_path("creds.yaml")

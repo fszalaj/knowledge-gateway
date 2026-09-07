@@ -9,17 +9,30 @@ from .vaults import Vault
 def _git(repo_root, *args, env=None, timeout: int = 30) -> str:
     # GIT_LITERAL_PATHSPECS: treat every pathspec as a literal path, so a note whose name
     # begins with pathspec magic (e.g. ':') can never broaden or alter a scoped add/commit.
-    proc = subprocess.run(
+    proc = subprocess.Popen(
         ["git", "-C", str(repo_root), *args],
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
-        timeout=timeout,
         env={**(env or os.environ), "GIT_LITERAL_PATHSPECS": "1"},
     )
+    try:
+        out, err = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        # Ask git to stop before killing it: git removes its lock files on SIGTERM, but
+        # SIGKILL (what subprocess.run's timeout sends) leaves .git/index.lock behind,
+        # and every later commit in that repo then fails until a human removes it.
+        proc.terminate()
+        try:
+            proc.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.communicate()
+        raise RuntimeError(f"git {args[0]} timed out after {timeout}s")
     if proc.returncode != 0:
-        msg = (proc.stderr.strip() or f"git {' '.join(args)} failed").replace(str(repo_root), "<repo>")
+        msg = (err.strip() or f"git {' '.join(args)} failed").replace(str(repo_root), "<repo>")
         raise RuntimeError(msg)
-    return proc.stdout
+    return out
 
 
 def _tracked(repo_root, path: str) -> bool:

@@ -15,7 +15,7 @@ Separate an ordinary code change from a release. Do not move `stable`, create a 
 4. Probe `http://127.0.0.1:8765/mcp/`. An unauthenticated HTTP `401` confirms the authenticated endpoint is reachable; use an authorized MCP smoke test to verify `list_vaults` and one bounded `read_note`.
 5. Record the deployed revision. If validation fails, restore the previously known version or tag and re-run the same checks.
 
-The bundled updater compares the remote `stable` SHA, reinstalls, restarts, and records the new SHA only after those steps succeed.
+The bundled updater (`deploy/auto-update.sh`) compares the latest PyPI version with the installed one and reinstalls plus restarts only when they differ. It keeps no marker file, so the installed version is the state and a half-finished update heals on the next run.
 
 ## Prepare a release
 
@@ -23,8 +23,8 @@ The bundled updater compares the remote `stable` SHA, reinstalls, restarts, and 
 2. Move the `Unreleased` changelog entries into the new version section and update the version in `pyproject.toml` and `server.json`.
 3. Run `uv lock --check`, the skill validator, the full test suite, and `uv build`. Inspect the built metadata and complete diff.
 4. Open a pull request and require green CI for Python 3.11, 3.12, and 3.13. Merge only the reviewed release commit.
-5. Tag the exact green `main` commit as `vX.Y.Z` and push the immutable tag. The tag workflow builds artifacts, creates the GitHub release, and publishes to PyPI through OIDC Trusted Publishing.
-6. Verify the GitHub release and PyPI publication before moving `stable` to the same tag with `--force-with-lease`.
+5. Merge the reviewed version bump. `release.yml` releases from the green `ci` run on `main`: it builds, publishes to PyPI through OIDC Trusted Publishing, creates the `vX.Y.Z` GitHub release (which creates the tag), and fast-forwards `stable`. Do not tag or move `stable` by hand; a tag pushed before a successful upload burns that version.
+6. Watch the release run to completion, then verify the GitHub release, the PyPI version and that `stable` points at the tag.
 7. Verify one refreshed `uvx --refresh` client and each managed server health check.
 
 ## Completion report

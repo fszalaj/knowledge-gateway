@@ -124,3 +124,21 @@ def test_rewrite_wikilinks_md_caseinsensitive_and_boundaries():
     for s in ("[[Gamma]]", "[[Gamma.md]]", "[[Gamma#h]]", "[[Gamma^b]]", "![[Gamma]]"):
         assert s in out, (s, out)
     assert "[[Betafoo]]" in out and "[[A Beta]]" in out  # boundaries: left untouched
+
+
+def test_insert_keeps_frontmatter_when_fence_is_at_eof():
+    # A note that ends at its closing fence has no trailing newline; without one the
+    # insert used to be glued onto the fence ("---## New"), destroying the frontmatter.
+    note = "---\ntype: x\n---"
+    for out in (edits.insert_markdown(note, "## New\nbody"),
+                edits.insert_markdown(note, "## New\nbody", position="top")):
+        assert out.startswith("---\ntype: x\n---\n")
+        assert dict(edits.read_frontmatter(out)) == {"type": "x"}
+
+
+def test_frontmatter_value_yaml_cannot_construct():
+    # ruamel raises ValueError (not YAMLError) for an out-of-range date.
+    bad = "---\nupdated: 2026-13-45\n---\nbody\n"
+    assert edits.read_frontmatter(bad) == {}
+    with pytest.raises(ValueError, match="frontmatter_unparseable"):
+        edits.update_frontmatter(bad, {"status": "active"})

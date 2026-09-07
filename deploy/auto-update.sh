@@ -12,6 +12,8 @@ latest=$(curl -fsS https://pypi.org/pypi/knowledge-gateway/json \
 installed=$(uv tool list 2>/dev/null | awk '/^knowledge-gateway /{print substr($2,2)}')
 [ "$latest" = "$installed" ] && exit 0
 
-uv tool install --reinstall "knowledge-gateway==$latest" || exit 1
+# Carry the extras: a bare reinstall would silently downgrade the server to the core
+# vault tools and take the graph and convert tools off the air.
+uv tool install --reinstall "knowledge-gateway[graph,convert]==$latest" || exit 1
 systemctl --user restart knowledge-gateway || exit 1
 echo "knowledge-gateway ${installed:-none} -> $latest"

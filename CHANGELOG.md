@@ -5,6 +5,123 @@ All notable changes to knowledge-gateway. Consumers track the **PyPI** package
 per-repo re-pin). The `stable` git branch is a permanent alias for the same release, for
 pinning straight from git. Every release is also an immutable `vX.Y.Z` tag for pinning/audit.
 
+## Unreleased
+
+### Added
+- **A built graph says where it came from.** `graph_build` and `knowledge-gateway-graph` now
+  write a `<name>.meta.yaml` sidecar - source revision, build time, builder version and the
+  snapshot's SHA-256 - and `graph_stats` and `list_graphs` return it with every answer. A graph
+  is a snapshot: it cannot refuse to be stale, and the reader had no way to tell a fresh one
+  from a snapshot of a revision that no longer exists. `list_graphs` carries each snapshot's
+  revision and build time; `graph_stats` adds `snapshot_matches`, false when the snapshot
+  changed after its manifest was written, and reports a missing or unreadable manifest as such
+  rather than omitting it, which would read as "no problem". The sidecar records the source directory's
+  basename, never an absolute path, because these fields reach clients in shared mode.
+
+### Changed
+- **Agent guidance: a session-harness reference and a `CLAUDE.md` alias.** `AGENTS.md` now points
+  substantive work at the installed personal `session-harness` skill, records where this
+  repository's durable context and handoffs live, and `CLAUDE.md` is a relative symlink to it, so
+  Claude Code loads the same contract that Codex, Copilot and Cursor already read.
+- **Skills: field-tested guidance folded back into `wiki-query`, `wiki-curate` and `wiki-lint`.**
+  Verify possibly stale vault state against live evidence and the code graph, re-read a page right
+  before patching it, keep `created`/`updated` semantics, fix only the failures a batch introduced,
+  keep derived `.graph/` snapshots out of vault history, and report the deterministic gate apart
+  from the manual checks.
+
+- **Skill and deploy text caught up with the v0.9.0 extras swap.** `gateway-setup` and
+  `code-graph-build` still described `[graph]` as the Python/Ansible profile and
+  `[graph-all]` as the broad one; `[graph]` has been the broad profile since v0.9.0 and
+  `[graph-slim]` is the narrow one. `code-graph-explore` gained the Fabric node ids and
+  relations, `gateway-operations` now describes the updater and the automated release the
+  repository actually has, and the deploy units name PyPI rather than `@stable`.
+- **`code-graph-build` says how to compare a rebuild with the snapshot it replaces.** Node ids
+  carry `#L<line>`, so one inserted line renumbers everything below it and a substring match on
+  a name like `page` hits half a repository - two ways for a validation step to report a
+  confident, wrong verdict about a rebuild.
+- **`gateway.server.repo_layout` is a function.** The vault/repository layout detection was
+  inline in `build_local_server`, where nothing could observe it: `git -C <vault>` reaches the
+  same repository either way, so its tests could only assert that a server object exists.
+- **Dead code removed**, as reported by the audit: `graph.graph_dir`, the unused `context`
+  parameter of the ripgrep wrapper (a no-op even when passed), and the async branch of the
+  error-mapping decorator, which no tool used - a test now fails if a tool ever becomes async.
+  The uninstalled-source version fallback says `0+unknown` instead of the long-deleted `0.2.0`.
+
+### Fixed
+- **`patch_note` could destroy a note's frontmatter.** A note whose closing `---` sits at
+  EOF has no trailing newline, so the inserted block was glued onto the fence
+  (`---## New`), and the frontmatter stopped being frontmatter. The fence terminator is
+  now normalised once, where the block is split off.
+- **A frontmatter value YAML cannot construct no longer breaks a query.** ruamel raises
+  `ValueError`, not `YAMLError`, for a well-formed scalar it cannot build - an out-of-range
+  date such as `updated: 2026-13-45`. `read_frontmatter` promised to be lenient about a bad
+  note and was not, so one such note failed `query_notes` with a masked error and
+  `patch_frontmatter` with an unprefixed one.
+- **One unreadable note no longer fails a whole query.** `query_notes` read every listed
+  note directly: a non-UTF-8 note aborted the query with a masked error, and a symlinked
+  note pointing outside the vault was read even though `read_note` refuses it. It now
+  goes through the same `safe_note_path` guard and skips what it cannot read.
+- **`search`, `backlinks` and `list_tags` no longer fail on a non-UTF-8 note.** ripgrep
+  reports such a line as base64 `bytes` rather than `text`; the wrapper read only `text`
+  and raised `KeyError`. A match whose *filename* is not valid UTF-8 is dropped instead of
+  reported under a lossy name that could belong to a different note.
+- **`list_tags` counted at most 1000 lines.** The aggregate inherited the ceiling meant
+  for a client-facing search, so it silently undercounted tags - and dropped rare ones -
+  in any vault with more tagged lines than that. The ceiling is now 50000 lines, above any
+  real vault; it bounds memory rather than promising an exact count.
+- **`rename_note` derives its stems from the validated paths.** A trailing slash in
+  `old_path` yielded an empty stem, which rewrote every `[[#heading]]` and `[[|alias]]`
+  link in the vault; on a case-insensitive filesystem a case-mismatched `old_path` also
+  re-created the note under its old name (`samefile` now decides, not string equality), and one unreadable note no longer aborts the whole rename.
+- **`read_canvas` rejects a canvas that is not a JSON object**, instead of returning a
+  list or scalar from a tool declared `-> dict`.
+- **`convert_to_markdown` has an allowlist.** It accepted any non-hidden file in a vault,
+  which contradicts the note surface being `.md`-only precisely so a token cannot reach a
+  config or secret file that happens to live in the vault. It now takes the document
+  types it advertises (`CONVERT_EXTS`) and refuses the rest with `not_convertible:`.
+- **A slow git command no longer bricks a repository.** The 30s guard killed git with
+  SIGKILL, which leaves `.git/index.lock` behind and fails every later commit until a
+  human removes it. git is now asked to stop first, and only killed if it will not.
+- **One unreadable file no longer aborts a whole graph build.** The Python pass caught
+  only `SyntaxError`, so a broken symlink, an unreadable file or a NUL byte in the source
+  killed the build; the Ansible filter-plugin pass and the Fabric model reader had the
+  same hole.
+- **`--languages` rejects a name it cannot use.** The builder takes tree-sitter language
+  names (`javascript`), but the CLI's own example showed extensions (`js ts`), and an
+  unknown name silently dropped every file of that language instead of failing. The check
+  lives in the builder, so `graph_build` cannot replace a good graph with an empty one
+  either.
+- **src-layout repositories resolve their own imports.** `src/pkg/mod.py` is imported as
+  `pkg.mod`, which was indexed only as `src.pkg.mod`, so every first-party import in such
+  a repository became a phantom `extmodule:` node - exactly what the resolver exists to
+  prevent. That is the only inferred spelling: an exact path always wins over it, and no
+  prefix is guessed from any directory that merely holds an `__init__.py`.
+- **`graph_neighbors` is deterministic.** It truncated an unordered set, so the returned
+  subset varied per process and could drop the centre node itself; edges reached from both
+  ends at depth >= 2 were also returned twice. Nodes now come centre-first in discovery
+  order, edges are unique, and a result that dropped
+  nodes or edges says so.
+- **`graph_neighbors(direction=...)` is validated.** An unsupported value silently returned
+  the centre node alone; the parameter is now an enum in the tool schema.
+- **`read_attachment` reports the file's real media type.** Everything that is not an image
+  arrived as `application/<extension>` - a `.mp3` as `application/mp3` - and its resource URI
+  repeated the extension (`song.mp3.mp3`). The type is now derived from the filename; the
+  resource URI is the bare filename, as it was before - it never carried a server path.
+- **`rename_note` counts a symlinked note once.** A vault-internal symlink resolves to the
+  note it points at, so that note was rewritten twice and counted twice, reporting more link
+  rewrites than actually happened.
+- **Ansible tasks inside `block` / `rescue` / `always` are their own nodes.** Nested task lists
+  restart at index 0, so a block's first task and the file's first task shared an id whenever
+  they shared a name, and two tasks collapsed into one. `include_tasks` targets are normalised
+  too, so a `../` include reaches the real file node instead of a dangling one.
+- **The daily updater no longer strips a server's extras.** `deploy/auto-update.sh`
+  reinstalled `knowledge-gateway==<version>` without `[graph,convert]`, so the first
+  automatic update took the graph and conversion tools off a server that was installed
+  the way the README prescribes.
+- **`server.json` was two releases behind** (0.9.0 against a 0.11.0 package), pointing MCP
+  Registry clients at a version without the Fabric pass. A test now fails when the
+  manifest and the package disagree, since the bump is a manual release step.
+
 ## v0.11.0 - 2026-08-19
 
 ### Fixed

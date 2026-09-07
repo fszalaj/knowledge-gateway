@@ -12,6 +12,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from . import manifest
+
 GRAPH_DIRNAME = ".graph"
 
 
@@ -21,10 +23,6 @@ def _nx():
         return nx
     except ImportError:  # pragma: no cover
         raise ValueError("graph_unavailable: install the [graph] extra (networkx) to use graph tools")
-
-
-def graph_dir(vault_path: Path) -> Path:
-    return Path(vault_path) / GRAPH_DIRNAME
 
 
 def graph_file(vault_path: Path, name: str, *, must_exist: bool = True) -> Path:
@@ -43,6 +41,7 @@ def graph_file(vault_path: Path, name: str, *, must_exist: bool = True) -> Path:
 
 
 def list_graphs(vault_path: Path) -> list[dict]:
+    """Graphs in the vault, each with its counts and the provenance of its snapshot."""
     base = Path(vault_path).resolve()
     d = base / GRAPH_DIRNAME
     if not d.is_dir():
@@ -56,8 +55,11 @@ def list_graphs(vault_path: Path) -> list[dict]:
             meta = g.get("graph", {}) if isinstance(g, dict) else {}
         except Exception:
             meta = {}
+        prov = manifest.read(p, contain_to=base)
         out.append({"name": p.stem, "nodes": meta.get("node_count"),
-                    "edges": meta.get("edge_count"), "communities": meta.get("communities")})
+                    "edges": meta.get("edge_count"), "communities": meta.get("communities"),
+                    "revision": prov.get("revision"), "built_at": prov.get("built_at"),
+                    "provenance": prov["status"]})
     return out
 
 
@@ -95,10 +97,11 @@ def neighbors(vault_path: Path, name: str, node_id: str, depth: int = 1,
         raise ValueError(f"node_not_found: {node_id}")
     depth = max(1, min(depth, 4))
     seen = {node_id}
-    frontier = {node_id}
-    edges: list[dict] = []
+    order = [node_id]          # insertion order, centre first: a set would truncate at random
+    frontier = [node_id]
+    edges: dict[tuple, dict] = {}   # keyed: depth>=2 reaches the same edge from both ends
     for _ in range(depth):
-        nxt = set()
+        nxt = []
         for n in frontier:
             pairs = []
             if direction in ("out", "both"):
@@ -106,17 +109,23 @@ def neighbors(vault_path: Path, name: str, node_id: str, depth: int = 1,
             if direction in ("in", "both"):
                 pairs += [(p, n) for p in G.predecessors(n)]
             for u, v in pairs:
-                edges.append({"source": u, "target": v, "relation": G.edges[u, v].get("relation"),
-                              "confidence": G.edges[u, v].get("confidence")})
+                edges.setdefault((u, v), {"source": u, "target": v,
+                                          "relation": G.edges[u, v].get("relation"),
+                                          "confidence": G.edges[u, v].get("confidence")})
                 other = v if u == n else u
                 if other not in seen:
                     seen.add(other)
-                    nxt.add(other)
+                    order.append(other)
+                    nxt.append(other)
         frontier = nxt
         if not frontier:
             break
-    nodes = [_node_view(G, n) for n in list(seen)[: max(1, min(limit, 500))]]
-    return {"center": node_id, "nodes": nodes, "edges": edges[: max(1, min(limit * 4, 2000))]}
+    cap = max(1, min(limit, 500))
+    edge_cap = max(1, min(limit * 4, 2000))
+    nodes = [_node_view(G, n) for n in order[:cap]]
+    return {"center": node_id, "nodes": nodes,
+            "truncated": len(order) > cap or len(edges) > edge_cap,
+            "edges": list(edges.values())[:edge_cap]}
 
 
 def god_nodes(vault_path: Path, name: str, top_n: int = 10) -> list[dict]:
@@ -147,4 +156,5 @@ def stats(vault_path: Path, name: str) -> dict:
         raise ValueError(f"graph_invalid: {name}: {e}")
     if not isinstance(data, dict) or not isinstance(data.get("nodes"), list) or not isinstance(data.get("links"), list):
         raise ValueError(f"graph_invalid: {name}: not a node-link graph")
-    return data.get("graph", {})
+    # A snapshot cannot refuse to be stale, so what it was built from travels with it.
+    return {**data.get("graph", {}), "provenance": manifest.read(p, contain_to=Path(vault_path))}

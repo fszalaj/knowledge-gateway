@@ -124,3 +124,41 @@ def test_strip_jsonc_trailing_comma_and_string_safety():
     assert json.loads(_strip_jsonc('{"a":1, // c\n}')) == {"a": 1}        # comma, comment, brace
     assert json.loads(_strip_jsonc('{"a":1, /* c */ }')) == {"a": 1}      # comma, block comment, brace
     assert json.loads(_strip_jsonc('{"a":"x,}","b":2}')) == {"a": "x,}", "b": 2}  # comma in string kept
+
+
+def test_src_layout_absolute_imports_resolve(tmp_path):
+    # `src/` is not a package, so `pkg.mod` - how the import is actually written - has to
+    # resolve from the top-most package dir down, not only as `src.pkg.mod`.
+    _write(tmp_path / "src/pkg/__init__.py", "")
+    _write(tmp_path / "src/pkg/mod.py", "VALUE = 1\n")
+    _write(tmp_path / "src/pkg/app.py", "from pkg.mod import VALUE\nimport pkg.mod\n")
+    imp = _imports(build_graph(tmp_path))
+    assert ("module:src/pkg/app.py", "module:src/pkg/mod.py") in imp
+    assert not any(t.startswith("extmodule:pkg") for _, t in imp)
+
+
+def test_src_layout_alias_never_shadows_a_real_path(tmp_path):
+    # `examples/pkg/mod.py` also spells out to `pkg.mod`, but only as an inferred alias:
+    # the file actually importable as `pkg.mod` must win.
+    for d in ("pkg", "examples/pkg"):
+        _write(tmp_path / d / "__init__.py", "")
+        _write(tmp_path / d / "mod.py", "VALUE = 1\n")
+    r = ImportResolver(tmp_path, ["pkg/__init__.py", "pkg/mod.py",
+                                  "examples/pkg/__init__.py", "examples/pkg/mod.py"])
+    assert r.resolve_py_abs("pkg.mod") == "pkg/mod.py"
+    assert r.resolve_py_abs("examples.pkg.mod") == "examples/pkg/mod.py"
+
+
+def test_src_layout_alias_loses_to_an_exact_path_and_is_not_invented_elsewhere(tmp_path):
+    # Only the setuptools src-layout is inferred. `pkg/sub/mod.py` must NOT become
+    # `sub.mod`, an `examples/pkg` must not claim `pkg.mod`, and the root-name anchor
+    # must not beat a real `pkg/mod.py`.
+    rels = ["mod.py", "pkg/__init__.py", "pkg/mod.py", "pkg/sub/__init__.py", "pkg/sub/mod.py",
+            "examples/pkg/__init__.py", "examples/pkg/mod.py",
+            "src/lib/__init__.py", "src/lib/thing.py", "src/ns/deep.py"]
+    r = ImportResolver(tmp_path / "pkg", rels)     # root itself named pkg -> anchor alias
+    assert r.resolve_py_abs("pkg.mod") == "pkg/mod.py"      # exact beats the anchor alias
+    assert r.resolve_py_abs("sub.mod") is None              # not a real import spelling
+    assert r.resolve_py_abs("lib.thing") == "src/lib/thing.py"
+    assert r.resolve_py_abs("ns.deep") == "src/ns/deep.py"  # namespace pkg keeps its path
+    assert r.resolve_py_abs("examples.pkg.mod") == "examples/pkg/mod.py"

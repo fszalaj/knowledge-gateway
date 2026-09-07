@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import subprocess
 import time
@@ -12,24 +13,38 @@ from .vaults import EXCLUDE_DIRS
 EXCLUDE_GLOBS = [f"!{d}/**" for d in sorted(EXCLUDE_DIRS)]
 
 
+def _rg_text(field: dict, *, exact: bool = False) -> str | None:
+    """rg reports UTF-8 as {"text": ...} and anything else as base64 {"bytes": ...}; one
+    latin-1 note must not make search, backlinks and list_tags fail with a KeyError.
+
+    A filename has to name the file back exactly, so `exact` callers get None rather than
+    a lossy replacement path that could point at a different note. Line text is display
+    only, so there the replacement character is the better answer."""
+    if "text" in field:
+        return field["text"]
+    raw = base64.b64decode(field.get("bytes", ""))
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return None if exact else raw.decode("utf-8", "replace")
+
+
 def ripgrep(
     root: Path,
     pattern: str,
     *,
     regex: bool = False,
     limit: int = 50,
-    context: int = 0,
+    max_limit: int = 1000,
     timeout: int = 20,
     ignore_case: bool = False,
 ) -> list[dict]:
-    limit = max(1, min(limit, 1000))
+    limit = max(1, min(limit, max_limit))
     # -i forces case-insensitive (used for wikilink/tag matching, which Obsidian
     # treats case-insensitively); -S (smart case) stays the default for free-text search.
     cmd = ["rg", "--json", "-i" if ignore_case else "-S"]
     if not regex:
         cmd.append("--fixed-strings")
-    if context:
-        cmd += ["-C", str(context)]
     for g in EXCLUDE_GLOBS:
         cmd += ["--glob", g]
     # Notes only — never surface non-markdown files; -m bounds per-file output.
@@ -58,16 +73,19 @@ def ripgrep(
             if evt.get("type") != "match":
                 continue
             data = evt["data"]
-            abs_path = Path(data["path"]["text"]).resolve()
+            path_text = _rg_text(data["path"], exact=True)
+            if path_text is None:  # a filename we cannot name back exactly
+                continue
+            abs_path = Path(path_text).resolve()
             try:
                 rel = abs_path.relative_to(root).as_posix()
             except ValueError:
-                rel = data["path"]["text"]
+                rel = path_text
             results.append(
                 {
                     "file": rel,
                     "line": data["line_number"],
-                    "text": data["lines"]["text"].rstrip("\n"),
+                    "text": _rg_text(data["lines"]).rstrip("\n"),  # display: never None
                 }
             )
             if len(results) >= limit:

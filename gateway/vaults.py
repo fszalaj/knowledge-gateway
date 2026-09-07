@@ -22,6 +22,12 @@ ATTACHMENT_EXTS = set(IMAGE_FORMATS) | {
     ".mp4", ".webm", ".mov", ".mkv",
 }
 MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
+# convert_to_markdown reads document types beyond the note surface. It stays an allowlist
+# for the same reason safe_note_path is .md-only: a token that may read notes must not be
+# able to turn any non-hidden file that happens to sit in a vault into text.
+CONVERT_EXTS = ATTACHMENT_EXTS | {
+    ".docx", ".pptx", ".xlsx", ".xls", ".msg", ".html", ".htm", ".csv", ".epub",
+}
 CANVAS_EXT = ".canvas"  # Obsidian Canvas (JSON: nodes incl. 'group' type, edges, 'color' fields)
 
 
@@ -124,6 +130,15 @@ class Vault:
             if limit and len(out) >= limit:
                 break
         return out
+
+    def safe_convert_path(self, rel: str) -> Path:
+        # Same containment + hidden guards as a note; allowlist is CONVERT_EXTS.
+        target = self.safe_join(rel)
+        if any(part.startswith(".") for part in target.relative_to(self.path).parts):
+            raise PermissionError(f"path_hidden: {rel}")
+        if target.suffix.lower() not in CONVERT_EXTS:
+            raise PermissionError(f"not_convertible: {rel}")
+        return target
 
     def safe_canvas_path(self, rel: str) -> Path:
         # A .canvas file (Obsidian Canvas, JSON). Same containment + hidden guards as a note.

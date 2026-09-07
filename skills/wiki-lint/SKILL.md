@@ -36,4 +36,7 @@ Use the repository's deterministic consistency script when one exists, then supp
 - Resolve embed targets against `list_notes` and `list_attachments`. If no deterministic checker exists, report the inspected scope instead of claiming complete coverage.
 - Do not refresh another contributor's personal context page.
 - Do not delete orphaned files automatically when provenance or archive value is unclear.
+- Fix failures introduced by the current work; report unrelated pre-existing failures without silently expanding the batch.
+- Keep derived artifacts such as `.graph/` snapshots out of the vault's Git history and validate a code graph with its own gate, not with the wiki lint.
+- Report a passing deterministic gate separately from the manual checks that remain; a script rarely validates every wikilink, frontmatter value, or stale current-context page.
 - Finish with the exact commands run, counts by severity, files changed, and residual warnings.

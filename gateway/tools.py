@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import base64
 import functools
-import inspect
 import json
+import mimetypes
 import os
 from pathlib import Path
+from typing import Literal
 
 from fastmcp.exceptions import ToolError
 from fastmcp.server.dependencies import get_access_token
-from fastmcp.utilities.types import File, Image
+from fastmcp.utilities.types import Image
+import mcp.types as mcp_types
 
 from . import acl, edits, gitops, links
 from . import tags as tagmod
@@ -21,12 +24,17 @@ from . import graph as graphmod
 
 MAX_NOTE_BYTES = 10 * 1024 * 1024  # read_note guard against a pathological huge file
 
+# One note the gateway cannot read must never fail a whole-vault iteration. RuntimeError
+# is in the tuple because that is what Path.resolve() raises for a symlink loop up to
+# Python 3.12 (3.13 raises OSError); UnicodeDecodeError is a ValueError.
+_UNREADABLE = (OSError, UnicodeDecodeError, RuntimeError)
+
 # Only the gateway's own deliberate, client-facing failures (by message prefix) are
 # surfaced as ToolError when details are masked; unexpected OS/git errors stay hidden.
 _EXPECTED_PREFIXES = (
     "not_found:", "exists:", "too_large:", "heading_not_found:", "bad_position:",
     "bad_message:", "path_escape:", "path_excluded:", "path_hidden:", "not_a_note:",
-    "not_an_attachment:", "not_a_canvas:", "canvas_invalid:",
+    "not_an_attachment:", "not_a_canvas:", "canvas_invalid:", "not_convertible:",
     "ambiguous_old_name:", "new_name_taken:", "frontmatter_",
     "vault_forbidden:", "write_forbidden:",
     "graph_not_found:", "graph_invalid:", "graph_unavailable:",
@@ -36,19 +44,8 @@ _EXPECTED_EXC = (FileNotFoundError, FileExistsError, ValueError, PermissionError
 
 
 def _expected_to_tool_error(fn):
-    if inspect.iscoroutinefunction(fn):
-        @functools.wraps(fn)
-        async def awrap(*a, **k):
-            try:
-                return await fn(*a, **k)
-            except ToolError:
-                raise
-            except _EXPECTED_EXC as e:
-                if str(e).startswith(_EXPECTED_PREFIXES):
-                    raise ToolError(str(e)) from e
-                raise
-        return awrap
-
+    # Every tool here is sync. An async one would return its coroutine before this wrapper
+    # could see the exception, so test_no_tool_is_async guards that this stays true.
     @functools.wraps(fn)
     def wrap(*a, **k):
         try:
@@ -157,8 +154,8 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
     @tool
     def read_attachment(vault: str, path: str):
         """Read a binary attachment: an image returns as an inline Image; other types
-        (PDF, audio, video) return as a File. Refuses non-attachment paths and files
-        over the 25 MiB cap."""
+        (PDF, audio, video) return as an embedded resource carrying the file's real media
+        type. Refuses non-attachment paths and files over the 25 MiB cap."""
         v = _vault(vault, write=False)
         target = v.safe_attachment_path(path)
         if not target.is_file():
@@ -169,7 +166,17 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
         fmt = IMAGE_FORMATS.get(target.suffix.lower())
         if fmt:
             return Image(data=data, format=fmt)
-        return File(data=data, format=target.suffix.lower().lstrip("."), name=target.name)
+        # Built here rather than via fastmcp's File, which derives the media type from the
+        # extension as `application/<ext>` - so a .mp3 arrived as `application/mp3` and its
+        # URI doubled the extension. The URI stays the bare filename: the server's absolute
+        # path is not the client's business, least of all in shared mode.
+        mime = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
+        return mcp_types.EmbeddedResource(
+            type="resource",
+            resource=mcp_types.BlobResourceContents(
+                uri=f"file:///{target.name}", mimeType=mime,
+                blob=base64.b64encode(data).decode()),
+        )
 
     @tool
     def list_canvases(vault: str, subdir: str | None = None, limit: int = 200) -> list[str]:
@@ -188,9 +195,12 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
         if target.stat().st_size > MAX_NOTE_BYTES:
             raise ValueError(f"too_large: {path} is over {MAX_NOTE_BYTES // (1024 * 1024)} MiB")
         try:
-            return json.loads(target.read_text(encoding="utf-8") or "{}")
+            data = json.loads(target.read_text(encoding="utf-8") or "{}")
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             raise ValueError(f"canvas_invalid: {path}: {e}")
+        if not isinstance(data, dict):  # declared -> dict; a list/scalar must not escape
+            raise ValueError(f"canvas_invalid: {path}: not a JSON object")
+        return data
 
     @wtool
     def write_canvas(
@@ -236,7 +246,8 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
     # ---- code graph (read-only over <vault>/.graph/<name>.json) ----
     @tool
     def list_graphs(vault: str) -> list[dict]:
-        """List the built code graphs available for a vault (under .graph/)."""
+        """List the built code graphs available for a vault (under .graph/), each with its
+        counts and the revision its snapshot was built from."""
         v = _vault(vault, write=False)
         return graphmod.list_graphs(v.path)
 
@@ -247,7 +258,8 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
         return graphmod.query(v.path, name, query, limit=limit)
 
     @tool
-    def graph_neighbors(vault: str, node_id: str, name: str = "default", depth: int = 1, direction: str = "both") -> dict:
+    def graph_neighbors(vault: str, node_id: str, name: str = "default", depth: int = 1,
+                        direction: Literal["in", "out", "both"] = "both") -> dict:
         """Neighbours of a node up to `depth` hops (direction: in|out|both) - related nodes + edges."""
         v = _vault(vault, write=False)
         return graphmod.neighbors(v.path, name, node_id, depth=depth, direction=direction)
@@ -266,20 +278,23 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
 
     @tool
     def graph_stats(vault: str, name: str = "default") -> dict:
-        """Metadata for a built code graph (counts, languages, communities)."""
+        """Metadata for a built code graph: counts, communities, and the `provenance` of the
+        snapshot - the revision it was built from, when, and whether the file still matches
+        the manifest. A graph is a snapshot; treat a mismatch or a missing manifest as
+        unknown freshness, not as fresh."""
         v = _vault(vault, write=False)
         return graphmod.stats(v.path, name)
 
     @tool
     def convert_to_markdown(vault: str, path: str) -> str:
-        """Convert a file (PDF / Office / image / HTML / CSV / ...) in the vault to Markdown text."""
+        """Convert a document in the vault to Markdown text: PDF, Office, image, HTML, CSV,
+        EPUB, Outlook message, audio or video. Refuses any other type (`not_convertible`),
+        hidden and out-of-vault paths, and files over 50 MiB."""
         v = _vault(vault, write=False)
-        target = v.safe_join(path)  # containment-safe; allows doc types beyond the attachment allowlist
-        if any(part.startswith(".") for part in target.relative_to(v.path).parts):
-            raise PermissionError(f"path_hidden: {path}")
+        target = v.safe_convert_path(path)  # contained; doc types beyond the attachment allowlist
         if not target.is_file():
             raise FileNotFoundError(f"not_found: {path}")
-        return convertmod.to_markdown(target)
+        return convertmod.to_markdown(target)  # enforces its own 50 MiB cap
 
     # build scans a source tree (outside the vault) - a deliberate local action, so it is
     # only exposed in local stdio mode where the trust boundary is local filesystem access.
@@ -298,9 +313,14 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
             out.parent.mkdir(exist_ok=True)
             atomic_write(out, json.dumps(data, ensure_ascii=False))
             g = data.get("graph", {})
+            # The snapshot records what it was built from, so a later query can say how old
+            # its answer is instead of leaving that to a note somebody has to remember.
+            from . import __version__, manifest
+            manifest.write(out, g, src, __version__)
             return {"vault": vault, "graph": out.stem, "source": str(src),
                     "nodes": g.get("node_count"), "edges": g.get("edge_count"),
-                    "communities": g.get("communities"), "treesitter": g.get("treesitter_available")}
+                    "communities": g.get("communities"), "treesitter": g.get("treesitter_available"),
+                    "provenance": manifest.path_for(out).name}
 
     @tool
     def git_status(vault: str) -> dict:
@@ -414,8 +434,9 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
             raise FileNotFoundError(f"not_found: {old_path}")
         if dst.exists():
             raise FileExistsError(f"exists: {new_path}")
-        old_stem = os.path.splitext(os.path.basename(old_path))[0]
-        new_stem = os.path.splitext(os.path.basename(new_path))[0]
+        # Stems come from the resolved, validated paths: a raw "Note.md/" basename is
+        # empty, and an empty stem rewrites every [[#heading]] link in the vault.
+        old_stem, new_stem = src.stem, dst.stem
 
         planned: list[tuple] = []
         if old_stem != new_stem:
@@ -432,12 +453,24 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
             for rel in all_notes:
                 if rel.startswith("_templates/") or "/_templates/" in rel:
                     continue
-                p = v.path / rel
-                if p.is_symlink():
+                if (v.path / rel).is_symlink():
+                    continue  # writing through it would replace the link with a file
+                try:
+                    # Same guard as query_notes: one escaping symlink or non-UTF-8 note
+                    # must not abort a rename across the whole vault.
+                    p = v.safe_note_path(rel)
+                    text = p.read_text(encoding="utf-8")
+                    # Which entry IS the note being moved, decided before the move: the
+                    # same file (a case-mismatched old_path spells the same note on a
+                    # case-insensitive filesystem) under the same name. A hardlink shares
+                    # the inode but has its own name, and must be rewritten in place.
+                    is_src = (p.samefile(src) and p.parent == src.parent
+                              and p.name.lower() == src.name.lower())
+                except _UNREADABLE:
                     continue
-                new_text, n = edits.rewrite_wikilinks(p.read_text(encoding="utf-8"), old_stem, new_stem)
+                new_text, n = edits.rewrite_wikilinks(text, old_stem, new_stem)
                 if n:
-                    planned.append((p, new_text, n))
+                    planned.append((p, new_text, n, is_src))
 
         # PASS 2: move, then apply the planned rewrites (the source's own links land in
         # the moved file at its new path).
@@ -445,8 +478,10 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
         os.replace(src, dst)
         touched: list[str] = []
         total = 0
-        for p, new_text, n in planned:
-            target = dst if p == src else p
+        for p, new_text, n, is_src in planned:
+            if not is_src and not p.exists():
+                continue  # deleted from under us between the scan and the write
+            target = dst if is_src else p
             atomic_write(target, new_text)
             touched.append(target.relative_to(v.path).as_posix())
             total += n
@@ -469,7 +504,13 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
         v = _vault(vault, write=False)
         out: list[dict] = []
         for rel in v.list_markdown(limit=5000):
-            data = edits.read_frontmatter((v.path / rel).read_text(encoding="utf-8"))
+            try:
+                # safe_note_path, like read_note: a symlinked note that escapes the vault
+                # is skipped, not read. Unreadable or non-UTF-8 notes are skipped too, so
+                # one bad file cannot fail a whole query.
+                data = edits.read_frontmatter(v.safe_note_path(rel).read_text(encoding="utf-8"))
+            except _UNREADABLE:
+                continue
             if type is not None and data.get("type") != type:
                 continue
             tags = data.get("tags") or []

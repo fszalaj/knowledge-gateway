@@ -16,7 +16,9 @@ _FUNC = (ast.FunctionDef, ast.AsyncFunctionDef)
 def extract(path: Path, rel: str, resolver=None) -> dict:
     try:
         tree = ast.parse(Path(path).read_text(encoding="utf-8", errors="replace"))
-    except SyntaxError:
+    except (SyntaxError, ValueError, OSError):
+        # A broken symlink, an unreadable file or a NUL byte in the source is one file's
+        # problem: skip it like a syntax error rather than failing the whole build.
         return {"nodes": [], "edges": []}
 
     nodes: list[dict] = []

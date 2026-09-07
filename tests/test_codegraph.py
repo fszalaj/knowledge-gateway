@@ -145,3 +145,47 @@ def test_build_graph_include_overrides_prune(tmp_path):
     ids = {n["id"] for n in build_graph(tmp_path, include=[".github", "vendor"])["nodes"]}
     assert "pyfunc:.github/scripts/ci.py:ci_check" in ids
     assert "pyfunc:vendor/firstparty/lib.py:vendored" in ids
+
+
+def test_unreadable_source_file_does_not_abort_the_build(tmp_path):
+    # A broken symlink and a NUL byte are one file's problem, not the build's.
+    _write(tmp_path / "ok.py", "def a():\n    return 1\n")
+    (tmp_path / "broken.py").symlink_to(tmp_path / "nowhere.py")
+    (tmp_path / "nul.py").write_bytes(b"x = '\x00'\n")
+    data = build_graph(tmp_path)
+    ids = {n["id"] for n in data["nodes"]}
+    assert "pyfunc:ok.py:a" in ids
+
+
+def test_unreadable_filter_plugin_does_not_abort_the_ansible_pass(tmp_path):
+    _ansible_repo(tmp_path)
+    (tmp_path / "filter_plugins/broken.py").symlink_to(tmp_path / "filter_plugins/nowhere.py")
+    ids = {n["id"] for n in extract_ansible.extract(tmp_path)["nodes"]}
+    assert "filter:build_body" in ids
+
+
+def test_same_named_tasks_in_a_block_do_not_collapse_onto_one_node(tmp_path):
+    # Nested task lists restart at index 0, so a block's first task and the file's first
+    # task shared an id whenever they shared a name - two tasks, one node.
+    _write(tmp_path / "roles/web/handlers/main.yml", "- name: restart web\n  debug: msg=x\n")
+    _write(tmp_path / "roles/web/tasks/main.yml",
+           "- name: poke it\n  command: echo a\n  notify: restart web\n"
+           "- name: wrapper\n  block:\n"
+           "    - name: poke it\n      command: echo b\n      notify: restart web\n"
+           "  rescue:\n"
+           "    - name: poke it\n      command: echo c\n      notify: restart web\n")
+    tasks = [n for n in extract_ansible.extract(tmp_path)["nodes"] if n["id"].startswith("task:")]
+    assert len(tasks) == 3                                   # three real tasks, three nodes
+    assert len({n["source_location"] for n in tasks}) == 3   # each keeps its own position
+
+
+def test_include_tasks_target_is_normalised(tmp_path):
+    # `../../common/tasks/main.yml` has to reach the real file node, not a dangling one.
+    _write(tmp_path / "roles/common/tasks/main.yml", "- name: c\n  debug: msg=c\n")
+    _write(tmp_path / "roles/web/tasks/main.yml",
+           "- name: pull it in\n  include_tasks: ../../common/tasks/main.yml\n")
+    frag = extract_ansible.extract(tmp_path)
+    targets = {e["target"] for e in frag["edges"] if e["relation"] == "include_tasks"}
+    ids = {n["id"] for n in frag["nodes"]}
+    assert targets == {"tasksfile:roles/common/tasks/main.yml"}
+    assert targets <= ids                                    # resolves to a node that exists

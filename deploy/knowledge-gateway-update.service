@@ -5,7 +5,7 @@
 #   systemctl --user daemon-reload && systemctl --user enable --now knowledge-gateway-update.timer
 
 [Unit]
-Description=Update Obsidian gateway to the latest @stable
+Description=Update knowledge-gateway to the latest PyPI release
 After=network-online.target
 
 [Service]

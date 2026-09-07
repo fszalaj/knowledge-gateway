@@ -48,12 +48,12 @@ def build_server() -> FastMCP:
     return mcp
 
 
-def build_local_server(vault_path: str) -> FastMCP:
-    """A single-vault, no-auth server for local stdio launch from a repo's .mcp.json.
-    The trust boundary is local filesystem access, so there are no tokens. Git
-    commits use the machine's own git identity. repo_root is auto-detected so
-    commits stay scoped to the vault subdir within a larger repo."""
-    p = Path(vault_path).expanduser().resolve()
+def repo_layout(vault: Path) -> tuple[Path, str]:
+    """(repo_root, subdir) for a vault dir: the git root when the vault sits inside one,
+    else the vault itself. Split out from build_local_server so the detection can be
+    tested directly - through a built server it is invisible, because `git -C <vault>`
+    reaches the same repository either way."""
+    p = Path(vault).expanduser().resolve()
     root = p
     try:
         cand = Path(gitops._git(p, "rev-parse", "--show-toplevel").strip()).resolve()
@@ -65,7 +65,16 @@ def build_local_server(vault_path: str) -> FastMCP:
             root = cand
     except Exception:
         pass
-    subdir = "." if root == p else p.relative_to(root).as_posix()
+    return root, ("." if root == p else p.relative_to(root).as_posix())
+
+
+def build_local_server(vault_path: str) -> FastMCP:
+    """A single-vault, no-auth server for local stdio launch from a repo's .mcp.json.
+    The trust boundary is local filesystem access, so there are no tokens. Git
+    commits use the machine's own git identity. repo_root is auto-detected so
+    commits stay scoped to the vault subdir within a larger repo."""
+    p = Path(vault_path).expanduser().resolve()
+    root, subdir = repo_layout(p)
     name = p.name
     vault = Vault(name=name, path=p, repo_root=root, subdir=subdir, description=f"local vault: {name}")
     mcp = FastMCP("knowledge-gateway", instructions=INSTRUCTIONS, mask_error_details=False)

@@ -1,5 +1,5 @@
-# systemd --user unit for the @stable uv-tool deploy (daily auto-update: deploy/knowledge-gateway-update.*).
-# Install: uv tool install --from git+https://github.com/fszalaj/knowledge-gateway@stable knowledge-gateway
+# systemd --user unit for the PyPI uv-tool deploy (daily auto-update: deploy/knowledge-gateway-update.*).
+# Install: uv tool install 'knowledge-gateway[graph,convert]'
 #   cp {vaults,tokens}.example.yaml ~/knowledge-gateway/ (edit; chmod 0600 tokens.yaml)
 #   cp deploy/knowledge-gateway.service ~/.config/systemd/user/ && systemctl --user enable --now knowledge-gateway
 #   loginctl enable-linger $USER   # Tailscale Serve fronts the loopback bind.

@@ -216,7 +216,10 @@ def extract(root: Path, exclude: frozenset[str] = frozenset(),
         elif atype == "SemanticModel":
             defs = d / "definition"
             for tmdl in sorted(defs.rglob("*.tmdl")) if defs.is_dir() else []:
-                text = tmdl.read_text(encoding="utf-8", errors="replace")
+                try:
+                    text = tmdl.read_text(encoding="utf-8", errors="replace")
+                except OSError:  # unreadable model file: skip it, not the build
+                    continue
                 trel = tmdl.relative_to(root).as_posix()
                 # A measure belongs to the table declared above it, so slice the file into
                 # table blocks first rather than guessing per match.

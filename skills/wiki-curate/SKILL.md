@@ -17,11 +17,12 @@ Use `list_vaults`, `read_note`, `search`, `backlinks`, `write_note`, `patch_note
 2. Read repository or vault instructions, the index/map of content, relevant pages, and `_templates/<type>.md` when templates exist.
 3. Search for an existing canonical page before creating a new one.
 4. Check `backlinks` before renaming or restructuring a page.
+5. Re-read a page immediately before patching it so changes from concurrent sessions are reconciled rather than overwritten.
 
 ## Write strategy
 
 - Use `patch_note` for a bounded insertion under a known heading or at top/bottom.
-- Use `patch_frontmatter` for status, ownership, tags, or `updated` changes without rewriting the body.
+- Use `patch_frontmatter` for status, ownership, tags, or `updated` changes without rewriting the body. Preserve `created`; refresh `updated` when durable content changes.
 - Use `write_note` for a new page or a deliberate full replacement.
 - Use `rename_note` rather than a filesystem move so inbound flat wikilinks are updated safely.
 - Use `delete_note` only after confirming the page is obsolete and its backlinks are handled.
@@ -35,6 +36,8 @@ Use `list_vaults`, `read_note`, `search`, `backlinks`, `write_note`, `patch_note
 - validation and rollback information;
 - links to related systems, modules, decisions, sources, and runbooks;
 - owner, status, created/updated dates, and tags following local templates.
+
+Keep verified facts, decisions, proposals, and remaining uncertainty clearly separated.
 
 Where the vault has an operation log or per-author current-context note, update them using the vault's established convention. Do not edit another contributor's personal context page.
 
