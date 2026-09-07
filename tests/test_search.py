@@ -36,3 +36,13 @@ def test_list_tags_counts_past_the_search_ceiling(git_vault):
     (git_vault / "Many.md").write_text("#bulk-tag line\n" * 1200)
     counts = {t["tag"]: t["count"] for t in tags.list_tags(git_vault)}
     assert counts["bulk-tag"] == 1200
+
+
+def test_rg_text_never_names_a_file_it_cannot_name_exactly():
+    from gateway.search import _rg_text
+    import base64
+    utf8 = {"text": "notes/a.md"}
+    latin = {"bytes": base64.b64encode(b"notes/caf\xe9.md").decode()}
+    assert _rg_text(utf8, exact=True) == "notes/a.md"
+    assert _rg_text(latin, exact=True) is None          # a path must round-trip exactly
+    assert "�" in _rg_text(latin)                  # display text may be lossy

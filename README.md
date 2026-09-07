@@ -141,7 +141,7 @@ Open the repo in your agent, approve the `wiki` server once, done.
 | `git_status` / `git_commit` | pending changes / commit (subdir-scoped, attributed) |
 | `list_graphs` / `graph_query` / `graph_neighbors` / `god_nodes` / `graph_shortest_path` / `graph_stats` | query a built code graph |
 | `graph_build` | build a code graph from a source tree into `.graph/<name>.json` (local mode only) |
-| `convert_to_markdown` | convert a file (PDF/Office/image/HTML/...) in the vault to Markdown (needs `[convert]`) |
+| `convert_to_markdown` | convert a document in the vault to Markdown (needs `[convert]`). Allowlisted types only - PDF, Office, image, HTML, CSV, EPUB, Outlook, audio/video - so a token that may read notes cannot read an arbitrary file that happens to sit in a vault; anything else is `not_convertible` |
 
 Note writes are atomic (temp file + `rename`) and use `safe_note_path`. Attachments, canvases,
 conversion inputs and graph files use their own type-specific containment guards. Together they

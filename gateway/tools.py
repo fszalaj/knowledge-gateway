@@ -21,6 +21,11 @@ from . import graph as graphmod
 
 MAX_NOTE_BYTES = 10 * 1024 * 1024  # read_note guard against a pathological huge file
 
+# One note the gateway cannot read must never fail a whole-vault iteration. RuntimeError
+# is in the tuple because that is what Path.resolve() raises for a symlink loop up to
+# Python 3.12 (3.13 raises OSError); UnicodeDecodeError is a ValueError.
+_UNREADABLE = (OSError, ValueError, RuntimeError)
+
 # Only the gateway's own deliberate, client-facing failures (by message prefix) are
 # surfaced as ToolError when details are masked; unexpected OS/git errors stay hidden.
 _EXPECTED_PREFIXES = (
@@ -275,11 +280,15 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
 
     @tool
     def convert_to_markdown(vault: str, path: str) -> str:
-        """Convert a file (PDF / Office / image / HTML / CSV / ...) in the vault to Markdown text."""
+        """Convert a document in the vault to Markdown text: PDF, Office, image, HTML, CSV,
+        EPUB, Outlook message, audio or video. Refuses any other type (`not_convertible`),
+        hidden and out-of-vault paths, and files over the 25 MiB cap."""
         v = _vault(vault, write=False)
         target = v.safe_convert_path(path)  # contained; doc types beyond the attachment allowlist
         if not target.is_file():
             raise FileNotFoundError(f"not_found: {path}")
+        if target.stat().st_size > MAX_ATTACHMENT_BYTES:
+            raise ValueError(f"too_large: {path} is over {MAX_ATTACHMENT_BYTES // (1024 * 1024)} MiB")
         return convertmod.to_markdown(target)
 
     # build scans a source tree (outside the vault) - a deliberate local action, so it is
@@ -439,7 +448,7 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
                     # must not abort a rename across the whole vault.
                     p = v.safe_note_path(rel)
                     text = p.read_text(encoding="utf-8")
-                except (OSError, ValueError):
+                except _UNREADABLE:
                     continue
                 new_text, n = edits.rewrite_wikilinks(text, old_stem, new_stem)
                 if n:
@@ -454,7 +463,9 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
         touched: list[str] = []
         total = 0
         for p, new_text, n, is_src in planned:
-            target = dst if is_src else p
+            # The moved note is the one whose own name is gone; a hardlink shares src's
+            # inode (so samefile is true) but keeps its name, and must be written in place.
+            target = dst if is_src and not p.exists() else p
             atomic_write(target, new_text)
             touched.append(target.relative_to(v.path).as_posix())
             total += n
@@ -482,7 +493,7 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
                 # is skipped, not read. Unreadable or non-UTF-8 notes are skipped too, so
                 # one bad file cannot fail a whole query.
                 data = edits.read_frontmatter(v.safe_note_path(rel).read_text(encoding="utf-8"))
-            except (OSError, ValueError):
+            except _UNREADABLE:
                 continue
             if type is not None and data.get("type") != type:
                 continue

@@ -29,9 +29,12 @@ pinning straight from git. Every release is also an immutable `vX.Y.Z` tag for p
   goes through the same `safe_note_path` guard and skips what it cannot read.
 - **`search`, `backlinks` and `list_tags` no longer fail on a non-UTF-8 note.** ripgrep
   reports such a line as base64 `bytes` rather than `text`; the wrapper read only `text`
-  and raised `KeyError`.
-- **`list_tags` counted at most 1000 lines.** The aggregate silently undercounted tags -
-  and dropped rare ones - in any vault with more tagged lines than the search ceiling.
+  and raised `KeyError`. A match whose *filename* is not valid UTF-8 is dropped instead of
+  reported under a lossy name that could belong to a different note.
+- **`list_tags` counted at most 1000 lines.** The aggregate inherited the ceiling meant
+  for a client-facing search, so it silently undercounted tags - and dropped rare ones -
+  in any vault with more tagged lines than that. The ceiling is now 50000 lines, above any
+  real vault; it bounds memory rather than promising an exact count.
 - **`rename_note` derives its stems from the validated paths.** A trailing slash in
   `old_path` yielded an empty stem, which rewrote every `[[#heading]]` and `[[|alias]]`
   link in the vault; on a case-insensitive filesystem a case-mismatched `old_path` also
@@ -42,6 +45,8 @@ pinning straight from git. Every release is also an immutable `vX.Y.Z` tag for p
   which contradicts the note surface being `.md`-only precisely so a token cannot reach a
   config or secret file that happens to live in the vault. It now takes the document
   types it advertises (`CONVERT_EXTS`) and refuses the rest with `not_convertible:`.
+  It also honours the same 25 MiB cap as `read_attachment`, which it never had; the
+  skill documented a 50 MiB limit that did not exist in the code.
 - **A slow git command no longer bricks a repository.** The 30s guard killed git with
   SIGKILL, which leaves `.git/index.lock` behind and fails every later commit until a
   human removes it. git is now asked to stop first, and only killed if it will not.

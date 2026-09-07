@@ -125,3 +125,34 @@ async def test_rename_survives_a_note_it_cannot_read(server, git_vault):
                               {"vault": git_vault.name, "old_path": "Beta.md", "new_path": "Gamma.md"})
     assert r.data["links_updated"] == 3                          # Alpha.md still rewritten
     assert (git_vault / "Gamma.md").exists()
+
+
+async def test_rename_writes_a_hardlinked_note_at_its_own_path(server, git_vault):
+    # A hardlink shares src's inode, so "is this the moved note?" cannot be answered by
+    # inode alone: the moved note is the one whose own name is gone after the move.
+    (git_vault / "Beta.md").write_text("self [[Beta]]\n")
+    (git_vault / "Copy.md").hardlink_to(git_vault / "Beta.md")
+    async with Client(server) as c:
+        r = await c.call_tool("rename_note",
+                              {"vault": git_vault.name, "old_path": "Beta.md", "new_path": "Gamma.md"})
+    assert sorted(r.data["files"]) == ["Alpha.md", "Copy.md", "Gamma.md"]
+    assert "[[Gamma]]" in (git_vault / "Copy.md").read_text()
+    assert "[[Beta]]" not in (git_vault / "Copy.md").read_text()
+
+
+async def test_query_notes_survives_a_symlink_loop(server, git_vault):
+    # Path.resolve() raises RuntimeError (not OSError) for a loop up to Python 3.12.
+    (git_vault / "loop_a.md").symlink_to(git_vault / "loop_b.md")
+    (git_vault / "loop_b.md").symlink_to(git_vault / "loop_a.md")
+    async with Client(server) as c:
+        notes = (await c.call_tool("query_notes", {"vault": git_vault.name})).data
+    assert "Alpha.md" in {n["path"] for n in notes}
+
+
+async def test_convert_refuses_a_file_over_the_cap(server, git_vault, monkeypatch):
+    import gateway.tools as toolsmod
+    (git_vault / "big.pdf").write_bytes(b"%PDF-1.4\n" + b"x" * 4096)
+    monkeypatch.setattr(toolsmod, "MAX_ATTACHMENT_BYTES", 1024)
+    async with Client(server) as c:
+        with pytest.raises(Exception, match="too_large"):
+            await c.call_tool("convert_to_markdown", {"vault": git_vault.name, "path": "big.pdf"})
