@@ -26,7 +26,7 @@ MAX_NOTE_BYTES = 10 * 1024 * 1024  # read_note guard against a pathological huge
 _EXPECTED_PREFIXES = (
     "not_found:", "exists:", "too_large:", "heading_not_found:", "bad_position:",
     "bad_message:", "path_escape:", "path_excluded:", "path_hidden:", "not_a_note:",
-    "not_an_attachment:", "not_a_canvas:", "canvas_invalid:",
+    "not_an_attachment:", "not_a_canvas:", "canvas_invalid:", "not_convertible:",
     "ambiguous_old_name:", "new_name_taken:", "frontmatter_",
     "vault_forbidden:", "write_forbidden:",
     "graph_not_found:", "graph_invalid:", "graph_unavailable:",
@@ -188,9 +188,12 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
         if target.stat().st_size > MAX_NOTE_BYTES:
             raise ValueError(f"too_large: {path} is over {MAX_NOTE_BYTES // (1024 * 1024)} MiB")
         try:
-            return json.loads(target.read_text(encoding="utf-8") or "{}")
+            data = json.loads(target.read_text(encoding="utf-8") or "{}")
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             raise ValueError(f"canvas_invalid: {path}: {e}")
+        if not isinstance(data, dict):  # declared -> dict; a list/scalar must not escape
+            raise ValueError(f"canvas_invalid: {path}: not a JSON object")
+        return data
 
     @wtool
     def write_canvas(
@@ -274,9 +277,7 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
     def convert_to_markdown(vault: str, path: str) -> str:
         """Convert a file (PDF / Office / image / HTML / CSV / ...) in the vault to Markdown text."""
         v = _vault(vault, write=False)
-        target = v.safe_join(path)  # containment-safe; allows doc types beyond the attachment allowlist
-        if any(part.startswith(".") for part in target.relative_to(v.path).parts):
-            raise PermissionError(f"path_hidden: {path}")
+        target = v.safe_convert_path(path)  # contained; doc types beyond the attachment allowlist
         if not target.is_file():
             raise FileNotFoundError(f"not_found: {path}")
         return convertmod.to_markdown(target)
@@ -414,8 +415,9 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
             raise FileNotFoundError(f"not_found: {old_path}")
         if dst.exists():
             raise FileExistsError(f"exists: {new_path}")
-        old_stem = os.path.splitext(os.path.basename(old_path))[0]
-        new_stem = os.path.splitext(os.path.basename(new_path))[0]
+        # Stems come from the resolved, validated paths: a raw "Note.md/" basename is
+        # empty, and an empty stem rewrites every [[#heading]] link in the vault.
+        old_stem, new_stem = src.stem, dst.stem
 
         planned: list[tuple] = []
         if old_stem != new_stem:
@@ -432,12 +434,18 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
             for rel in all_notes:
                 if rel.startswith("_templates/") or "/_templates/" in rel:
                     continue
-                p = v.path / rel
-                if p.is_symlink():
+                try:
+                    # Same guard as query_notes: one escaping symlink or non-UTF-8 note
+                    # must not abort a rename across the whole vault.
+                    p = v.safe_note_path(rel)
+                    text = p.read_text(encoding="utf-8")
+                except (OSError, ValueError):
                     continue
-                new_text, n = edits.rewrite_wikilinks(p.read_text(encoding="utf-8"), old_stem, new_stem)
+                new_text, n = edits.rewrite_wikilinks(text, old_stem, new_stem)
                 if n:
-                    planned.append((p, new_text, n))
+                    # samefile, not ==: on a case-insensitive filesystem a case-mismatched
+                    # old_path would otherwise re-create the note under its old name.
+                    planned.append((p, new_text, n, p.samefile(src)))
 
         # PASS 2: move, then apply the planned rewrites (the source's own links land in
         # the moved file at its new path).
@@ -445,8 +453,8 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
         os.replace(src, dst)
         touched: list[str] = []
         total = 0
-        for p, new_text, n in planned:
-            target = dst if p == src else p
+        for p, new_text, n, is_src in planned:
+            target = dst if is_src else p
             atomic_write(target, new_text)
             touched.append(target.relative_to(v.path).as_posix())
             total += n
@@ -469,7 +477,13 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
         v = _vault(vault, write=False)
         out: list[dict] = []
         for rel in v.list_markdown(limit=5000):
-            data = edits.read_frontmatter((v.path / rel).read_text(encoding="utf-8"))
+            try:
+                # safe_note_path, like read_note: a symlinked note that escapes the vault
+                # is skipped, not read. Unreadable or non-UTF-8 notes are skipped too, so
+                # one bad file cannot fail a whole query.
+                data = edits.read_frontmatter(v.safe_note_path(rel).read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
             if type is not None and data.get("type") != type:
                 continue
             tags = data.get("tags") or []

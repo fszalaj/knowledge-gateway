@@ -18,6 +18,31 @@ pinning straight from git. Every release is also an immutable `vX.Y.Z` tag for p
   keep derived `.graph/` snapshots out of vault history, and report the deterministic gate apart
   from the manual checks.
 
+### Fixed
+- **`patch_note` could destroy a note's frontmatter.** A note whose closing `---` sits at
+  EOF has no trailing newline, so the inserted block was glued onto the fence
+  (`---## New`), and the frontmatter stopped being frontmatter. The fence terminator is
+  now normalised once, where the block is split off.
+- **One unreadable note no longer fails a whole query.** `query_notes` read every listed
+  note directly: a non-UTF-8 note aborted the query with a masked error, and a symlinked
+  note pointing outside the vault was read even though `read_note` refuses it. It now
+  goes through the same `safe_note_path` guard and skips what it cannot read.
+- **`search`, `backlinks` and `list_tags` no longer fail on a non-UTF-8 note.** ripgrep
+  reports such a line as base64 `bytes` rather than `text`; the wrapper read only `text`
+  and raised `KeyError`.
+- **`list_tags` counted at most 1000 lines.** The aggregate silently undercounted tags -
+  and dropped rare ones - in any vault with more tagged lines than the search ceiling.
+- **`rename_note` derives its stems from the validated paths.** A trailing slash in
+  `old_path` yielded an empty stem, which rewrote every `[[#heading]]` and `[[|alias]]`
+  link in the vault; on a case-insensitive filesystem a case-mismatched `old_path` also
+  re-created the note under its old name (`samefile` now decides, not string equality), and one unreadable note no longer aborts the whole rename.
+- **`read_canvas` rejects a canvas that is not a JSON object**, instead of returning a
+  list or scalar from a tool declared `-> dict`.
+- **`convert_to_markdown` has an allowlist.** It accepted any non-hidden file in a vault,
+  which contradicts the note surface being `.md`-only precisely so a token cannot reach a
+  config or secret file that happens to live in the vault. It now takes the document
+  types it advertises (`CONVERT_EXTS`) and refuses the rest with `not_convertible:`.
+
 ## v0.11.0 - 2026-08-19
 
 ### Fixed

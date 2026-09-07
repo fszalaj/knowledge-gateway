@@ -80,3 +80,48 @@ async def test_read_too_large(server, git_vault, monkeypatch):
         with pytest.raises(Exception) as e:
             await c.call_tool("read_note", {"vault": git_vault.name, "path": "Alpha.md"})
     assert "too_large" in str(e.value)
+
+
+async def test_query_notes_skips_escaping_symlink_and_unreadable_notes(server, git_vault):
+    outside = git_vault.parent / "outside.md"   # git_vault IS tmp_path, so go one level up
+    outside.write_text("---\ntype: secret\n---\n")
+    (git_vault / "Link.md").symlink_to(outside)              # escapes the vault
+    (git_vault / "Latin.md").write_bytes(b"---\ntype: note\n---\ncaf\xe9\n")  # not UTF-8
+    async with Client(server) as c:
+        notes = (await c.call_tool("query_notes", {"vault": git_vault.name})).data
+    paths = {n["path"] for n in notes}
+    assert "Alpha.md" in paths                                # the query still answers
+    assert "Link.md" not in paths and "Latin.md" not in paths
+    assert not any(n["type"] == "secret" for n in notes)
+
+
+async def test_rename_with_trailing_slash_does_not_rewrite_bare_links(server, git_vault):
+    (git_vault / "Alpha.md").write_text("[[#heading]] and [[|alias]] and [[Beta]]\n")
+    async with Client(server) as c:
+        r = await c.call_tool("rename_note",
+                              {"vault": git_vault.name, "old_path": "Beta.md/", "new_path": "Delta.md"})
+    assert r.data["links_updated"] == 1
+    assert (git_vault / "Alpha.md").read_text() == "[[#heading]] and [[|alias]] and [[Delta]]\n"
+
+
+async def test_read_canvas_rejects_non_object_json(server, git_vault):
+    (git_vault / "board.canvas").write_text("[1, 2]")
+    async with Client(server) as c:
+        with pytest.raises(Exception, match="canvas_invalid"):
+            await c.call_tool("read_canvas", {"vault": git_vault.name, "path": "board.canvas"})
+
+
+async def test_convert_refuses_a_non_document_file(server, git_vault):
+    (git_vault / "credentials.yaml").write_text("token: shhh\n")
+    async with Client(server) as c:
+        with pytest.raises(Exception, match="not_convertible"):
+            await c.call_tool("convert_to_markdown", {"vault": git_vault.name, "path": "credentials.yaml"})
+
+
+async def test_rename_survives_a_note_it_cannot_read(server, git_vault):
+    (git_vault / "Latin.md").write_bytes(b"caf\xe9 [[Beta]]\n")   # not UTF-8
+    async with Client(server) as c:
+        r = await c.call_tool("rename_note",
+                              {"vault": git_vault.name, "old_path": "Beta.md", "new_path": "Gamma.md"})
+    assert r.data["links_updated"] == 3                          # Alpha.md still rewritten
+    assert (git_vault / "Gamma.md").exists()

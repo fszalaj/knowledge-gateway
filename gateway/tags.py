@@ -12,7 +12,10 @@ _TAG = re.compile(r"(?:^|[^\w/])#([A-Za-z][\w/-]*)")
 
 def list_tags(root: Path, *, limit: int = 5000) -> list[dict]:
     """Inline #tags with occurrence counts. Frontmatter `tags:` is a follow-up."""
-    hits = ripgrep(root, r"(^|[^\w/])#[A-Za-z][\w/-]*", regex=True, limit=limit)
+    # max_limit too: counting is an aggregate, so ripgrep's client-facing 1000-match
+    # ceiling would silently undercount tags (and drop rare ones) in a large vault.
+    hits = ripgrep(root, r"(^|[^\w/])#[A-Za-z][\w/-]*", regex=True, limit=limit,
+                   max_limit=limit)
     counter: Counter[str] = Counter()
     for h in hits:
         for m in _TAG.finditer(h["text"]):

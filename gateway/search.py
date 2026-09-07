@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import subprocess
 import time
@@ -12,17 +13,26 @@ from .vaults import EXCLUDE_DIRS
 EXCLUDE_GLOBS = [f"!{d}/**" for d in sorted(EXCLUDE_DIRS)]
 
 
+def _rg_text(field: dict) -> str:
+    """rg reports UTF-8 as {"text": ...} and anything else as base64 {"bytes": ...}; one
+    latin-1 note must not make search, backlinks and list_tags fail with a KeyError."""
+    if "text" in field:
+        return field["text"]
+    return base64.b64decode(field.get("bytes", "")).decode("utf-8", "replace")
+
+
 def ripgrep(
     root: Path,
     pattern: str,
     *,
     regex: bool = False,
     limit: int = 50,
+    max_limit: int = 1000,
     context: int = 0,
     timeout: int = 20,
     ignore_case: bool = False,
 ) -> list[dict]:
-    limit = max(1, min(limit, 1000))
+    limit = max(1, min(limit, max_limit))
     # -i forces case-insensitive (used for wikilink/tag matching, which Obsidian
     # treats case-insensitively); -S (smart case) stays the default for free-text search.
     cmd = ["rg", "--json", "-i" if ignore_case else "-S"]
@@ -58,7 +68,7 @@ def ripgrep(
             if evt.get("type") != "match":
                 continue
             data = evt["data"]
-            abs_path = Path(data["path"]["text"]).resolve()
+            abs_path = Path(_rg_text(data["path"])).resolve()
             try:
                 rel = abs_path.relative_to(root).as_posix()
             except ValueError:
@@ -67,7 +77,7 @@ def ripgrep(
                 {
                     "file": rel,
                     "line": data["line_number"],
-                    "text": data["lines"]["text"].rstrip("\n"),
+                    "text": _rg_text(data["lines"]).rstrip("\n"),
                 }
             )
             if len(results) >= limit:

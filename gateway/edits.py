@@ -32,9 +32,14 @@ def _parse(text: str) -> tuple[str, str, str] | None:
 
 
 def split_frontmatter(text: str) -> tuple[str, str]:
-    """Return (frontmatter_block_verbatim, body). Block is '' when absent."""
+    """Return (frontmatter_block, body). Block is '' when absent, and always ends with a
+    newline: a note whose closing fence sits at EOF would otherwise have the next insert
+    glued onto that fence, turning `---` into `---## New` and destroying the frontmatter."""
     p = _parse(text)
-    return (p[0], p[2]) if p else ("", text)
+    if not p:
+        return "", text
+    block = p[0] if p[0].endswith("\n") else p[0] + "\n"
+    return block, p[2]
 
 
 def read_frontmatter(text: str) -> dict:
@@ -45,7 +50,9 @@ def read_frontmatter(text: str) -> dict:
         return {}
     try:
         data = _yaml.load(p[1])
-    except YAMLError:
+    except (YAMLError, ValueError):
+        # ruamel raises ValueError, not YAMLError, for a well-formed scalar it cannot
+        # construct (`updated: 2026-13-45` -> "month must be in 1..12").
         return {}
     return data if isinstance(data, dict) else {}
 
@@ -58,7 +65,7 @@ def update_frontmatter(text: str, updates: dict) -> str:
     if p:
         try:
             data = _yaml.load(p[1])
-        except YAMLError as e:
+        except (YAMLError, ValueError) as e:
             raise ValueError(f"frontmatter_unparseable: {e}") from e
         if data is None:
             data = {}
