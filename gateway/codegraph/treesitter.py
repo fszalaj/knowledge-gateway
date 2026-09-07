@@ -1,4 +1,4 @@
-"""Broad multi-language pass via tree-sitter-language-pack (the [graph-all] extra).
+"""Broad multi-language pass via tree-sitter-language-pack (in the [graph] extra).
 
 One dependency covers ~30+ languages. For each parsed file we emit:
   - a `module:` node + a node per definition (function / method / class / struct /

@@ -70,6 +70,21 @@ pinning straight from git. Every release is also an immutable `vX.Y.Z` tag for p
   nodes or edges says so.
 - **`graph_neighbors(direction=...)` is validated.** An unsupported value silently returned
   the centre node alone; the parameter is now an enum in the tool schema.
+- **The daily updater no longer strips a server's extras.** `deploy/auto-update.sh`
+  reinstalled `knowledge-gateway==<version>` without `[graph,convert]`, so the first
+  automatic update took the graph and conversion tools off a server that was installed
+  the way the README prescribes.
+- **`server.json` was two releases behind** (0.9.0 against a 0.11.0 package), pointing MCP
+  Registry clients at a version without the Fabric pass. A test now fails when the
+  manifest and the package disagree, since the bump is a manual release step.
+
+### Changed
+- **Skill and deploy text caught up with the v0.9.0 extras swap.** `gateway-setup` and
+  `code-graph-build` still described `[graph]` as the Python/Ansible profile and
+  `[graph-all]` as the broad one; `[graph]` has been the broad profile since v0.9.0 and
+  `[graph-slim]` is the narrow one. `code-graph-explore` gained the Fabric node ids and
+  relations, `gateway-operations` now describes the updater and the automated release the
+  repository actually has, and the deploy units name PyPI rather than `@stable`.
 
 ## v0.11.0 - 2026-08-19
 

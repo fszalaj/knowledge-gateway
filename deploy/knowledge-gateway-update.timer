@@ -1,5 +1,5 @@
 [Unit]
-Description=Daily check for Obsidian gateway @stable updates
+Description=Daily check for knowledge-gateway releases
 
 [Timer]
 OnCalendar=daily

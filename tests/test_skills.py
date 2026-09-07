@@ -1,4 +1,5 @@
 import ast
+import json
 import importlib.util
 import os
 from pathlib import Path
@@ -85,3 +86,13 @@ def test_convert_extra_installs_pdf_and_office_converters():
     expected = "markitdown[pdf,docx,pptx,xlsx,xls,outlook]>=0.1"
     assert project["optional-dependencies"]["convert"] == [expected]
     assert expected in project["optional-dependencies"]["all"]
+
+
+def test_server_manifest_version_matches_the_package():
+    # The release procedure bumps server.json by hand, so nothing caught it drifting two
+    # releases behind the package it points registry clients at.
+    root = Path(__file__).resolve().parents[1]
+    version = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    manifest = json.loads((root / "server.json").read_text(encoding="utf-8"))
+    assert manifest["version"] == version
+    assert [p["version"] for p in manifest["packages"]] == [version]

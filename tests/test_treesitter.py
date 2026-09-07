@@ -1,4 +1,4 @@
-"""Broad-language tree-sitter pass (the [graph-all] extra).
+"""Broad-language tree-sitter pass (in the [graph] extra).
 
 Regression guard: this pass was once silently broken (it threw on every file and the
 error was swallowed -> zero nodes). These tests fail loudly if extraction stops working.

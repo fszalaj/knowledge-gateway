@@ -10,8 +10,8 @@ Configure the gateway without replacing existing MCP servers or committing secre
 ## Choose the capability set
 
 - Core vault only: no extra.
-- Code graph: `[graph-all]` for every supported language; `[graph]` only if the target is Python/Ansible only.
-- Broad tree-sitter graph: `[graph-all]`.
+- Code graph: `[graph]` for every supported language (`[graph-all]` is a kept alias).
+- Python/Ansible only, without the parser pack: `[graph-slim]`.
 - Document conversion: `[convert]`.
 - Complete skill pack: `[all]`.
 
