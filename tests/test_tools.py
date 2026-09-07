@@ -152,6 +152,9 @@ async def test_query_notes_survives_a_symlink_loop(server, git_vault):
 
 
 async def test_convert_refuses_a_file_over_the_cap(server, git_vault, monkeypatch):
+    # The size check lives past the converter import, so this needs the [convert] extra;
+    # without it the honest answer is convert_unavailable, not too_large.
+    pytest.importorskip("markitdown")
     from gateway import convert as convertmod
     (git_vault / "big.pdf").write_bytes(b"%PDF-1.4\n" + b"x" * 4096)
     monkeypatch.setattr(convertmod, "MAX_CONVERT_BYTES", 1024)
