@@ -50,6 +50,23 @@ pinning straight from git. Every release is also an immutable `vX.Y.Z` tag for p
 - **A slow git command no longer bricks a repository.** The 30s guard killed git with
   SIGKILL, which leaves `.git/index.lock` behind and fails every later commit until a
   human removes it. git is now asked to stop first, and only killed if it will not.
+- **One unreadable file no longer aborts a whole graph build.** The Python pass caught
+  only `SyntaxError`, so a broken symlink, an unreadable file or a NUL byte in the source
+  killed the build; the Ansible filter-plugin pass and the Fabric model reader had the
+  same hole.
+- **`--languages` rejects a name it cannot use.** The CLI takes tree-sitter language names
+  (`javascript`), but its own example showed extensions (`js ts`), and an unknown name
+  silently dropped every file of that language instead of failing.
+- **src-layout repositories resolve their own imports.** `src/pkg/mod.py` is imported as
+  `pkg.mod`, which was indexed only as `src.pkg.mod`, so every first-party import in such
+  a repository became a phantom `extmodule:` node - exactly what the resolver exists to
+  prevent.
+- **`graph_neighbors` is deterministic.** It truncated an unordered set, so the returned
+  subset varied per process and could drop the centre node itself; edges reached from both
+  ends at depth >= 2 were also returned twice. Nodes now come centre-first in discovery
+  order, edges are unique, and a truncated result says so.
+- **`graph_neighbors(direction=...)` is validated.** An unsupported value silently returned
+  the centre node alone; the parameter is now an enum in the tool schema.
 
 ## v0.11.0 - 2026-08-19
 

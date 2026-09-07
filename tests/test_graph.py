@@ -68,3 +68,16 @@ def test_invalid_json_and_bad_name(tmp_path):
         graphmod.graph_file(tmp_path, "a/b")  # path separator rejected
     with pytest.raises(ValueError, match="graph_invalid"):
         graphmod.graph_file(tmp_path, "..\\x")  # backslash separator rejected
+
+
+def test_neighbors_is_deterministic_centre_first_and_dedupes_edges(tmp_path):
+    v = _vault_with_graph(tmp_path)
+    node = "pyfunc:filter_plugins/f.py:b"
+    runs = [graphmod.neighbors(v, "default", node, depth=2) for _ in range(3)]
+    ids = [[n["id"] for n in r["nodes"]] for r in runs]
+    assert ids[0] == ids[1] == ids[2]                    # stable across calls
+    assert ids[0][0] == node                             # the centre is never truncated away
+    edges = [(e["source"], e["target"]) for e in runs[0]["edges"]]
+    assert len(edges) == len(set(edges))                 # depth 2 reaches an edge from both ends
+    small = graphmod.neighbors(v, "default", node, depth=2, limit=1)
+    assert [n["id"] for n in small["nodes"]] == [node] and small["truncated"] is True

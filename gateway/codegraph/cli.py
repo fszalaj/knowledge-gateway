@@ -1,6 +1,6 @@
 """CLI: build a code graph from a source tree into a graph.json.
 
-    knowledge-gateway-graph <source> -o <vault>/.graph/<name>.json [--languages js ts ...]
+    knowledge-gateway-graph <source> -o <vault>/.graph/<name>.json [--languages javascript typescript ...]
 
 Runs where the code is (the source tree may be outside any vault); writes a node-link
 graph.json the gateway then serves read-only. AST-only, no network, no LLM.
@@ -19,7 +19,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("source", help="source tree (code repo) to graph")
     ap.add_argument("-o", "--out", required=True, help="output graph.json path")
     ap.add_argument("--languages", nargs="*", default=None,
-                    help="restrict the tree-sitter pass to these languages (default: all available)")
+                    help="restrict the tree-sitter pass to these tree-sitter language names, "
+                         "e.g. javascript typescript tsx go rust (default: all available)")
     ap.add_argument("--exclude", nargs="*", default=None,
                     help="extra directory names to skip (hidden dirs and common "
                          "build/vendor dirs are always skipped)")
@@ -27,6 +28,12 @@ def main(argv: list[str] | None = None) -> int:
                     help="directory names to keep even if the prune rule would skip "
                          "them (e.g. .github, vendor)")
     args = ap.parse_args(argv)
+
+    from .treesitter import EXT_LANG
+    known = sorted(set(EXT_LANG.values()))
+    unknown = sorted(set(args.languages or ()) - set(known))
+    if unknown:  # silently graphing nothing is worse than refusing
+        ap.error(f"unknown language(s) {', '.join(unknown)}; choose from: {', '.join(known)}")
 
     from .build import build_graph  # imports networkx; needs the [graph] extra
     data = build_graph(args.source, languages=args.languages,

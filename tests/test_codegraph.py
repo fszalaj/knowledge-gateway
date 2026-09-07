@@ -145,3 +145,20 @@ def test_build_graph_include_overrides_prune(tmp_path):
     ids = {n["id"] for n in build_graph(tmp_path, include=[".github", "vendor"])["nodes"]}
     assert "pyfunc:.github/scripts/ci.py:ci_check" in ids
     assert "pyfunc:vendor/firstparty/lib.py:vendored" in ids
+
+
+def test_unreadable_source_file_does_not_abort_the_build(tmp_path):
+    # A broken symlink and a NUL byte are one file's problem, not the build's.
+    _write(tmp_path / "ok.py", "def a():\n    return 1\n")
+    (tmp_path / "broken.py").symlink_to(tmp_path / "nowhere.py")
+    (tmp_path / "nul.py").write_bytes(b"x = '\x00'\n")
+    data = build_graph(tmp_path)
+    ids = {n["id"] for n in data["nodes"]}
+    assert "pyfunc:ok.py:a" in ids
+
+
+def test_unreadable_filter_plugin_does_not_abort_the_ansible_pass(tmp_path):
+    _ansible_repo(tmp_path)
+    (tmp_path / "filter_plugins/broken.py").symlink_to(tmp_path / "filter_plugins/nowhere.py")
+    ids = {n["id"] for n in extract_ansible.extract(tmp_path)["nodes"]}
+    assert "filter:build_body" in ids

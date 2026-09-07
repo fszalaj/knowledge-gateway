@@ -5,6 +5,7 @@ import inspect
 import json
 import os
 from pathlib import Path
+from typing import Literal
 
 from fastmcp.exceptions import ToolError
 from fastmcp.server.dependencies import get_access_token
@@ -255,7 +256,8 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
         return graphmod.query(v.path, name, query, limit=limit)
 
     @tool
-    def graph_neighbors(vault: str, node_id: str, name: str = "default", depth: int = 1, direction: str = "both") -> dict:
+    def graph_neighbors(vault: str, node_id: str, name: str = "default", depth: int = 1,
+                        direction: Literal["in", "out", "both"] = "both") -> dict:
         """Neighbours of a node up to `depth` hops (direction: in|out|both) - related nodes + edges."""
         v = _vault(vault, write=False)
         return graphmod.neighbors(v.path, name, node_id, depth=depth, direction=direction)

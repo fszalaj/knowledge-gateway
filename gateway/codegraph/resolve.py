@@ -118,6 +118,15 @@ class ImportResolver:
                 continue
             idx.setdefault(dotted, rel)
             idx.setdefault(f"{self._anchor}.{dotted}", rel)
+            # src-layout: the import is written from the top-most package dir down
+            # (`src/pkg/mod.py` is imported as `pkg.mod`), so index that spelling too.
+            for i in range(len(parts) - 1):
+                if f"{'/'.join(parts[:i + 1])}/__init__.py" in self.rels:
+                    if i:
+                        tail = parts[i:-1] if parts[-1] == "__init__.py" else parts[i:-1] + [parts[-1][:-3]]
+                        if tail:
+                            idx.setdefault(".".join(tail), rel)
+                    break
         return idx
 
     def resolve_py_abs(self, dotted: str | None) -> str | None:

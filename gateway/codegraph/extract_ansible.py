@@ -86,7 +86,7 @@ def extract(root: Path, exclude: frozenset[str] = frozenset(),
         rel = py.relative_to(root).as_posix()
         try:
             tree = ast.parse(py.read_text(encoding="utf-8", errors="replace"))
-        except SyntaxError:
+        except (SyntaxError, ValueError, OSError):  # unreadable plugin: skip the file, not the build
             continue
         for f in tree.body:  # module-level functions only - avoid bogus method ids
             if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef)):

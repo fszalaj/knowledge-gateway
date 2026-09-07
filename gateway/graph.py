@@ -95,10 +95,11 @@ def neighbors(vault_path: Path, name: str, node_id: str, depth: int = 1,
         raise ValueError(f"node_not_found: {node_id}")
     depth = max(1, min(depth, 4))
     seen = {node_id}
-    frontier = {node_id}
-    edges: list[dict] = []
+    order = [node_id]          # insertion order, centre first: a set would truncate at random
+    frontier = [node_id]
+    edges: dict[tuple, dict] = {}   # keyed: depth>=2 reaches the same edge from both ends
     for _ in range(depth):
-        nxt = set()
+        nxt = []
         for n in frontier:
             pairs = []
             if direction in ("out", "both"):
@@ -106,17 +107,21 @@ def neighbors(vault_path: Path, name: str, node_id: str, depth: int = 1,
             if direction in ("in", "both"):
                 pairs += [(p, n) for p in G.predecessors(n)]
             for u, v in pairs:
-                edges.append({"source": u, "target": v, "relation": G.edges[u, v].get("relation"),
-                              "confidence": G.edges[u, v].get("confidence")})
+                edges.setdefault((u, v), {"source": u, "target": v,
+                                          "relation": G.edges[u, v].get("relation"),
+                                          "confidence": G.edges[u, v].get("confidence")})
                 other = v if u == n else u
                 if other not in seen:
                     seen.add(other)
-                    nxt.add(other)
+                    order.append(other)
+                    nxt.append(other)
         frontier = nxt
         if not frontier:
             break
-    nodes = [_node_view(G, n) for n in list(seen)[: max(1, min(limit, 500))]]
-    return {"center": node_id, "nodes": nodes, "edges": edges[: max(1, min(limit * 4, 2000))]}
+    cap = max(1, min(limit, 500))
+    nodes = [_node_view(G, n) for n in order[:cap]]
+    return {"center": node_id, "nodes": nodes, "truncated": len(order) > cap,
+            "edges": list(edges.values())[: max(1, min(limit * 4, 2000))]}
 
 
 def god_nodes(vault_path: Path, name: str, top_n: int = 10) -> list[dict]:
