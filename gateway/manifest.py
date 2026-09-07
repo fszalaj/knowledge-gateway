@@ -27,8 +27,9 @@ SCHEMA_VERSION = 1
 
 
 def path_for(snapshot: Path) -> Path:
-    return snapshot.with_suffix("").with_suffix(SUFFIX) if snapshot.suffix == ".json" \
-        else Path(str(snapshot) + SUFFIX)
+    # with_name, not with_suffix: a graph legitimately named `my.graph` would otherwise get
+    # `my.meta.yaml` and collide with a graph named `my`.
+    return snapshot.with_name(snapshot.stem + SUFFIX)
 
 
 def _sha256(path: Path) -> str:
@@ -101,12 +102,18 @@ def read(snapshot: Path) -> dict:
         matches = bool(recorded) and recorded == _sha256(snapshot)
     except OSError:
         matches = False
+    # These cross the tool boundary, and a hand-written manifest may hold anything: YAML
+    # parses an unquoted timestamp as a datetime and `builder:` as a mapping. Fields whose
+    # type callers rely on are normalised to text rather than passed through as they land.
+    def _text(value):
+        return None if value is None else (value if isinstance(value, str) else str(value))
+
     return {
         "status": "ok",
-        "built_at": doc.get("built_at"),
-        "builder": doc.get("builder"),
-        "source_root": source.get("root"),
-        "revision": source.get("revision"),
-        "dirty": source.get("dirty"),
+        "built_at": _text(doc.get("built_at")),
+        "builder": _text(doc.get("builder")),
+        "source_root": _text(source.get("root")),
+        "revision": _text(source.get("revision")),
+        "dirty": source.get("dirty") if isinstance(source.get("dirty"), bool) else None,
         "snapshot_matches": matches,
     }

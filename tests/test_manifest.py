@@ -76,3 +76,25 @@ def test_list_graphs_carries_the_revision(tmp_path):
     (row,) = graphmod.list_graphs(vault)
     assert row["name"] == "default" and row["provenance"] == "ok"
     assert row["revision"] == manifest.read(snap)["revision"]
+
+
+def test_sidecar_name_does_not_collide_for_a_dotted_graph_name(tmp_path):
+    assert manifest.path_for(tmp_path / "my.graph.json").name == "my.graph.meta.yaml"
+    assert manifest.path_for(tmp_path / "my.json").name == "my.meta.yaml"
+
+
+def test_a_hand_written_manifest_is_normalised_before_it_leaves(tmp_path):
+    # YAML parses an unquoted timestamp as a datetime and `builder:` as a mapping; a caller
+    # reading provenance over MCP must get the same types whoever wrote the file.
+    _, snap, _ = _built(tmp_path)
+    manifest.path_for(snap).write_text(
+        "schema_version: 1\n"
+        "built_at: 2026-09-07T11:31:56+02:00\n"          # unquoted -> datetime
+        "builder:\n  name: hand\n  version: '1'\n"        # a mapping, not a string
+        f"source:\n  root: https://example.invalid/repo\n  revision: abc123\n  dirty: yes\n"
+        f"snapshot:\n  sha256: {manifest._sha256(snap)}\n", encoding="utf-8")
+    prov = manifest.read(snap)
+    assert isinstance(prov["built_at"], str) and prov["built_at"].startswith("2026-09-07")
+    assert isinstance(prov["builder"], str) and "hand" in prov["builder"]
+    assert prov["revision"] == "abc123" and prov["dirty"] is True
+    assert prov["snapshot_matches"] is True
