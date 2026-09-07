@@ -33,6 +33,13 @@ Use the gateway's deterministic local graph builder. Extraction is AST/tree-sitt
 - A graph can be structurally valid and still incomplete for dynamic imports, reflection, dependency injection, generated code, or runtime-selected configuration.
 - If tree-sitter is unavailable while broad-language coverage is required, install `[graph]` (not `[graph-slim]`) and rebuild.
 
+### Comparing a rebuild with the snapshot it replaces
+
+- Match node ids exactly, never by substring. A short symbol name such as `page` or `index` occurs across most of a repository, so a substring check answers "still present" about a different symbol entirely.
+- A tree-sitter node id ends in `#L<line>`, so inserting one line renumbers every definition below it. A diff of node ids then shows deletions and additions where the code only moved. Compare by file and name before concluding that a symbol disappeared.
+- A count that moved is a question, not a verdict: an import resolved to a first-party file adds edges, and an extractor fix can legitimately remove nodes. Establish which change explains the delta before accepting or rejecting the rebuild.
+- When a rebuild and a manifest disagree, suspect the check first. The manifest was written by the thing that produced the file.
+
 ## Output
 
 Return:

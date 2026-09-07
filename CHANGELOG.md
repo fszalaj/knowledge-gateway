@@ -102,6 +102,10 @@ pinning straight from git. Every release is also an immutable `vX.Y.Z` tag for p
   `[graph-slim]` is the narrow one. `code-graph-explore` gained the Fabric node ids and
   relations, `gateway-operations` now describes the updater and the automated release the
   repository actually has, and the deploy units name PyPI rather than `@stable`.
+- **`code-graph-build` says how to compare a rebuild with the snapshot it replaces.** Node ids
+  carry `#L<line>`, so one inserted line renumbers everything below it and a substring match on
+  a name like `page` hits half a repository - two ways for a validation step to report a
+  confident, wrong verdict about a rebuild.
 - **`gateway.server.repo_layout` is a function.** The vault/repository layout detection was
   inline in `build_local_server`, where nothing could observe it: `git -C <vault>` reaches the
   same repository either way, so its tests could only assert that a server object exists.
