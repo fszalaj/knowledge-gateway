@@ -79,3 +79,11 @@ def test_cli_rejects_unknown_language_names(tmp_path):
     with pytest.raises(SystemExit):
         cli.main([str(tmp_path), "-o", str(tmp_path / "g.json"), "--languages", "js", "ts"])
     assert cli.main([str(tmp_path), "-o", str(tmp_path / "g.json"), "--languages", "javascript"]) == 0
+
+
+def test_graph_build_rejects_unknown_language_names(tmp_path):
+    # The MCP graph_build path calls build_graph directly, so the check cannot live in the CLI.
+    from gateway.codegraph import build_graph
+    (tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="graph_invalid: unknown language"):
+        build_graph(tmp_path, languages=["js"])

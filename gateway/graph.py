@@ -119,9 +119,11 @@ def neighbors(vault_path: Path, name: str, node_id: str, depth: int = 1,
         if not frontier:
             break
     cap = max(1, min(limit, 500))
+    edge_cap = max(1, min(limit * 4, 2000))
     nodes = [_node_view(G, n) for n in order[:cap]]
-    return {"center": node_id, "nodes": nodes, "truncated": len(order) > cap,
-            "edges": list(edges.values())[: max(1, min(limit * 4, 2000))]}
+    return {"center": node_id, "nodes": nodes,
+            "truncated": len(order) > cap or len(edges) > edge_cap,
+            "edges": list(edges.values())[:edge_cap]}
 
 
 def god_nodes(vault_path: Path, name: str, top_n: int = 10) -> list[dict]:

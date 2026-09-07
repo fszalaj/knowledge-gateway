@@ -29,15 +29,14 @@ def main(argv: list[str] | None = None) -> int:
                          "them (e.g. .github, vendor)")
     args = ap.parse_args(argv)
 
-    from .treesitter import EXT_LANG
-    known = sorted(set(EXT_LANG.values()))
-    unknown = sorted(set(args.languages or ()) - set(known))
-    if unknown:  # silently graphing nothing is worse than refusing
-        ap.error(f"unknown language(s) {', '.join(unknown)}; choose from: {', '.join(known)}")
-
     from .build import build_graph  # imports networkx; needs the [graph] extra
-    data = build_graph(args.source, languages=args.languages,
-                       exclude=args.exclude, include=args.include)
+    try:
+        data = build_graph(args.source, languages=args.languages,
+                           exclude=args.exclude, include=args.include)
+    except ValueError as e:  # an unknown --languages deserves an argparse error, not a traceback
+        if not str(e).startswith("graph_invalid:"):
+            raise
+        ap.error(str(e).removeprefix("graph_invalid: "))
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")

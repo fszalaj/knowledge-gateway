@@ -2,6 +2,10 @@
 from __future__ import annotations
 
 import json
+import os
+from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
@@ -73,11 +77,35 @@ def test_invalid_json_and_bad_name(tmp_path):
 def test_neighbors_is_deterministic_centre_first_and_dedupes_edges(tmp_path):
     v = _vault_with_graph(tmp_path)
     node = "pyfunc:filter_plugins/f.py:b"
+    # Across PROCESSES with different hash seeds: within one process a set iterates the
+    # same way every time, so repeating the call here would pass on the old code too.
+    code = ("import json,sys;from gateway import graph as g;"
+            "print(json.dumps([n['id'] for n in "
+            "g.neighbors(sys.argv[1],'default',sys.argv[2],depth=2)['nodes']]))")
+    root = Path(__file__).resolve().parents[1]
+    seeded = {subprocess.run([sys.executable, "-c", code, str(v), node], cwd=root, check=True,
+                             capture_output=True, text=True,
+                             env={**os.environ, "PYTHONHASHSEED": seed}).stdout
+              for seed in ("0", "1", "42")}
+    assert len(seeded) == 1
+
     runs = [graphmod.neighbors(v, "default", node, depth=2) for _ in range(3)]
     ids = [[n["id"] for n in r["nodes"]] for r in runs]
-    assert ids[0] == ids[1] == ids[2]                    # stable across calls
     assert ids[0][0] == node                             # the centre is never truncated away
     edges = [(e["source"], e["target"]) for e in runs[0]["edges"]]
     assert len(edges) == len(set(edges))                 # depth 2 reaches an edge from both ends
     small = graphmod.neighbors(v, "default", node, depth=2, limit=1)
     assert [n["id"] for n in small["nodes"]] == [node] and small["truncated"] is True
+
+
+def test_neighbors_reports_truncated_edges_too(tmp_path):
+    # A dense neighbourhood can fit its nodes under the cap while its edges do not.
+    import networkx as nx
+    G = nx.complete_graph(25, create_using=nx.DiGraph)
+    G = nx.relabel_nodes(G, {i: f"n{i}" for i in G})
+    gd = tmp_path / graphmod.GRAPH_DIRNAME
+    gd.mkdir()
+    (gd / "dense.json").write_text(json.dumps(nx.node_link_data(G, edges="links")), encoding="utf-8")
+    r = graphmod.neighbors(tmp_path, "dense", "n0", depth=2)
+    assert len(r["nodes"]) == 25 and len(r["edges"]) == 400   # nodes fit, edges do not
+    assert r["truncated"] is True

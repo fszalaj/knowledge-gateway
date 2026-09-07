@@ -108,24 +108,33 @@ class ImportResolver:
     def _build_py_index(self) -> dict:
         """dotted module path -> rel, under both the root and root.name (parent-on-path)."""
         idx: dict[str, str] = {}
-        for rel in sorted(self.rels):  # sorted -> deterministic when foo.py and foo/__init__.py coexist
+        rels = sorted(self.rels)  # sorted -> deterministic when foo.py and foo/__init__.py coexist
+
+        def dotted_of(parts) -> str:
+            return ".".join(parts[:-1] if parts[-1] == "__init__.py" else parts[:-1] + [parts[-1][:-3]])
+
+        for rel in rels:  # pass 1: exact spellings
             if not rel.endswith(".py"):
                 continue
-            parts = rel.split("/")
-            dotted = ".".join(parts[:-1] if parts[-1] == "__init__.py"
-                               else parts[:-1] + [parts[-1][:-3]])
+            dotted = dotted_of(rel.split("/"))
             if not dotted:
                 continue
             idx.setdefault(dotted, rel)
             idx.setdefault(f"{self._anchor}.{dotted}", rel)
-            # src-layout: the import is written from the top-most package dir down
-            # (`src/pkg/mod.py` is imported as `pkg.mod`), so index that spelling too.
-            for i in range(len(parts) - 1):
+
+        # Pass 2, never before pass 1: a src-layout import is written from the top-most
+        # package dir down (`src/pkg/mod.py` is imported as `pkg.mod`), but that spelling
+        # is inferred, so it may only fill a name no real path already claims - otherwise
+        # an `examples/pkg/mod.py` would shadow the actual `pkg/mod.py`.
+        for rel in rels:
+            if not rel.endswith(".py"):
+                continue
+            parts = rel.split("/")
+            for i in range(1, len(parts) - 1):
                 if f"{'/'.join(parts[:i + 1])}/__init__.py" in self.rels:
-                    if i:
-                        tail = parts[i:-1] if parts[-1] == "__init__.py" else parts[i:-1] + [parts[-1][:-3]]
-                        if tail:
-                            idx.setdefault(".".join(tail), rel)
+                    tail = dotted_of(parts[i:])
+                    if tail:
+                        idx.setdefault(tail, rel)
                     break
         return idx
 

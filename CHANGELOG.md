@@ -54,9 +54,11 @@ pinning straight from git. Every release is also an immutable `vX.Y.Z` tag for p
   only `SyntaxError`, so a broken symlink, an unreadable file or a NUL byte in the source
   killed the build; the Ansible filter-plugin pass and the Fabric model reader had the
   same hole.
-- **`--languages` rejects a name it cannot use.** The CLI takes tree-sitter language names
-  (`javascript`), but its own example showed extensions (`js ts`), and an unknown name
-  silently dropped every file of that language instead of failing.
+- **`--languages` rejects a name it cannot use.** The builder takes tree-sitter language
+  names (`javascript`), but the CLI's own example showed extensions (`js ts`), and an
+  unknown name silently dropped every file of that language instead of failing. The check
+  lives in the builder, so `graph_build` cannot replace a good graph with an empty one
+  either.
 - **src-layout repositories resolve their own imports.** `src/pkg/mod.py` is imported as
   `pkg.mod`, which was indexed only as `src.pkg.mod`, so every first-party import in such
   a repository became a phantom `extmodule:` node - exactly what the resolver exists to
@@ -64,7 +66,8 @@ pinning straight from git. Every release is also an immutable `vX.Y.Z` tag for p
 - **`graph_neighbors` is deterministic.** It truncated an unordered set, so the returned
   subset varied per process and could drop the centre node itself; edges reached from both
   ends at depth >= 2 were also returned twice. Nodes now come centre-first in discovery
-  order, edges are unique, and a truncated result says so.
+  order, edges are unique, and a result that dropped
+  nodes or edges says so.
 - **`graph_neighbors(direction=...)` is validated.** An unsupported value silently returned
   the centre node alone; the parameter is now an enum in the tool schema.
 

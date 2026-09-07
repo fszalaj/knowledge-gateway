@@ -135,3 +135,15 @@ def test_src_layout_absolute_imports_resolve(tmp_path):
     imp = _imports(build_graph(tmp_path))
     assert ("module:src/pkg/app.py", "module:src/pkg/mod.py") in imp
     assert not any(t.startswith("extmodule:pkg") for _, t in imp)
+
+
+def test_src_layout_alias_never_shadows_a_real_path(tmp_path):
+    # `examples/pkg/mod.py` also spells out to `pkg.mod`, but only as an inferred alias:
+    # the file actually importable as `pkg.mod` must win.
+    for d in ("pkg", "examples/pkg"):
+        _write(tmp_path / d / "__init__.py", "")
+        _write(tmp_path / d / "mod.py", "VALUE = 1\n")
+    r = ImportResolver(tmp_path, ["pkg/__init__.py", "pkg/mod.py",
+                                  "examples/pkg/__init__.py", "examples/pkg/mod.py"])
+    assert r.resolve_py_abs("pkg.mod") == "pkg/mod.py"
+    assert r.resolve_py_abs("examples.pkg.mod") == "examples/pkg/mod.py"
