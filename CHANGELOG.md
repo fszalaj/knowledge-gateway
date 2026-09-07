@@ -42,6 +42,9 @@ pinning straight from git. Every release is also an immutable `vX.Y.Z` tag for p
   which contradicts the note surface being `.md`-only precisely so a token cannot reach a
   config or secret file that happens to live in the vault. It now takes the document
   types it advertises (`CONVERT_EXTS`) and refuses the rest with `not_convertible:`.
+- **A slow git command no longer bricks a repository.** The 30s guard killed git with
+  SIGKILL, which leaves `.git/index.lock` behind and fails every later commit until a
+  human removes it. git is now asked to stop first, and only killed if it will not.
 
 ## v0.11.0 - 2026-08-19
 

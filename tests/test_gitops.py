@@ -1,4 +1,7 @@
+import os
 import subprocess
+
+import pytest
 
 from gateway import gitops
 from gateway.vaults import Vault
@@ -51,3 +54,21 @@ def test_commit_nothing_to_do(tmp_path):
     v = _repo_with_subdir_vault(tmp_path)
     res = gitops.commit(v, "noop")
     assert res["committed"] is False
+
+
+def test_git_timeout_asks_git_to_stop_before_killing_it(tmp_path, monkeypatch):
+    # SIGKILL would leave .git/index.lock behind and brick every later commit; git only
+    # cleans up after itself when it gets a signal it can handle.
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    marker = tmp_path / "got-sigterm"
+    stub = bin_dir / "git"
+    # short sleeps, so the trap runs promptly and no grandchild outlives the shell
+    stub.write_text(f'#!/bin/sh\ntrap "echo yes > {marker}; exit 143" TERM\n'
+                    'i=0\nwhile [ $i -lt 300 ]; do sleep 0.1; i=$((i+1)); done\n')
+    stub.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
+
+    with pytest.raises(RuntimeError, match="timed out"):
+        gitops._git(tmp_path, "status", timeout=1)
+    assert marker.read_text().strip() == "yes"
