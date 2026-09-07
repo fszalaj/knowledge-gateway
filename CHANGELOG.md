@@ -52,6 +52,11 @@ pinning straight from git. Every release is also an immutable `vX.Y.Z` tag for p
   EOF has no trailing newline, so the inserted block was glued onto the fence
   (`---## New`), and the frontmatter stopped being frontmatter. The fence terminator is
   now normalised once, where the block is split off.
+- **A frontmatter value YAML cannot construct no longer breaks a query.** ruamel raises
+  `ValueError`, not `YAMLError`, for a well-formed scalar it cannot build - an out-of-range
+  date such as `updated: 2026-13-45`. `read_frontmatter` promised to be lenient about a bad
+  note and was not, so one such note failed `query_notes` with a masked error and
+  `patch_frontmatter` with an unprefixed one.
 - **One unreadable note no longer fails a whole query.** `query_notes` read every listed
   note directly: a non-UTF-8 note aborted the query with a masked error, and a symlinked
   note pointing outside the vault was read even though `read_note` refuses it. It now
