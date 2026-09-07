@@ -45,8 +45,6 @@ pinning straight from git. Every release is also an immutable `vX.Y.Z` tag for p
   which contradicts the note surface being `.md`-only precisely so a token cannot reach a
   config or secret file that happens to live in the vault. It now takes the document
   types it advertises (`CONVERT_EXTS`) and refuses the rest with `not_convertible:`.
-  It also honours the same 25 MiB cap as `read_attachment`, which it never had; the
-  skill documented a 50 MiB limit that did not exist in the code.
 - **A slow git command no longer bricks a repository.** The 30s guard killed git with
   SIGKILL, which leaves `.git/index.lock` behind and fails every later commit until a
   human removes it. git is now asked to stop first, and only killed if it will not.
@@ -62,7 +60,8 @@ pinning straight from git. Every release is also an immutable `vX.Y.Z` tag for p
 - **src-layout repositories resolve their own imports.** `src/pkg/mod.py` is imported as
   `pkg.mod`, which was indexed only as `src.pkg.mod`, so every first-party import in such
   a repository became a phantom `extmodule:` node - exactly what the resolver exists to
-  prevent.
+  prevent. That is the only inferred spelling: an exact path always wins over it, and no
+  prefix is guessed from any directory that merely holds an `__init__.py`.
 - **`graph_neighbors` is deterministic.** It truncated an unordered set, so the returned
   subset varied per process and could drop the centre node itself; edges reached from both
   ends at depth >= 2 were also returned twice. Nodes now come centre-first in discovery

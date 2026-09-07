@@ -147,3 +147,18 @@ def test_src_layout_alias_never_shadows_a_real_path(tmp_path):
                                   "examples/pkg/__init__.py", "examples/pkg/mod.py"])
     assert r.resolve_py_abs("pkg.mod") == "pkg/mod.py"
     assert r.resolve_py_abs("examples.pkg.mod") == "examples/pkg/mod.py"
+
+
+def test_src_layout_alias_loses_to_an_exact_path_and_is_not_invented_elsewhere(tmp_path):
+    # Only the setuptools src-layout is inferred. `pkg/sub/mod.py` must NOT become
+    # `sub.mod`, an `examples/pkg` must not claim `pkg.mod`, and the root-name anchor
+    # must not beat a real `pkg/mod.py`.
+    rels = ["mod.py", "pkg/__init__.py", "pkg/mod.py", "pkg/sub/__init__.py", "pkg/sub/mod.py",
+            "examples/pkg/__init__.py", "examples/pkg/mod.py",
+            "src/lib/__init__.py", "src/lib/thing.py", "src/ns/deep.py"]
+    r = ImportResolver(tmp_path / "pkg", rels)     # root itself named pkg -> anchor alias
+    assert r.resolve_py_abs("pkg.mod") == "pkg/mod.py"      # exact beats the anchor alias
+    assert r.resolve_py_abs("sub.mod") is None              # not a real import spelling
+    assert r.resolve_py_abs("lib.thing") == "src/lib/thing.py"
+    assert r.resolve_py_abs("ns.deep") == "src/ns/deep.py"  # namespace pkg keeps its path
+    assert r.resolve_py_abs("examples.pkg.mod") == "examples/pkg/mod.py"

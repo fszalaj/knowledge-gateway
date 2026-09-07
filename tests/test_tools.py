@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 from fastmcp import Client
 
@@ -150,9 +152,57 @@ async def test_query_notes_survives_a_symlink_loop(server, git_vault):
 
 
 async def test_convert_refuses_a_file_over_the_cap(server, git_vault, monkeypatch):
-    import gateway.tools as toolsmod
+    from gateway import convert as convertmod
     (git_vault / "big.pdf").write_bytes(b"%PDF-1.4\n" + b"x" * 4096)
-    monkeypatch.setattr(toolsmod, "MAX_ATTACHMENT_BYTES", 1024)
+    monkeypatch.setattr(convertmod, "MAX_CONVERT_BYTES", 1024)
     async with Client(server) as c:
         with pytest.raises(Exception, match="too_large"):
             await c.call_tool("convert_to_markdown", {"vault": git_vault.name, "path": "big.pdf"})
+
+
+async def test_graph_build_rejects_an_unknown_language_as_a_client_error(server, git_vault, tmp_path):
+    # graph_build reaches the builder directly, and its refusal must arrive as a
+    # deliberate gateway error rather than a masked internal one.
+    pytest.importorskip("networkx")
+    src = tmp_path / "src_tree"
+    src.mkdir()
+    (src / "a.py").write_text("x = 1\n")
+    async with Client(server) as c:
+        with pytest.raises(Exception, match="graph_invalid: unknown language"):
+            await c.call_tool("graph_build", {"vault": git_vault.name, "source": str(src),
+                                              "name": "g", "languages": ["js"]})
+        r = await c.call_tool("graph_build", {"vault": git_vault.name, "source": str(src),
+                                              "name": "g", "languages": ["python"]})
+    assert r.data["nodes"] > 0          # naming a native pass is not an error
+
+
+async def test_rename_survives_a_note_that_vanishes_during_the_scan(server, git_vault, monkeypatch):
+    # The identity check runs inside the guarded read, so a note deleted between the read
+    # and that check drops out of the rename instead of aborting it.
+    (git_vault / "Ghost.md").write_text("[[Beta]]\n")
+    real = Path.samefile
+
+    def flaky(self, other):
+        if self.name == "Ghost.md":
+            raise FileNotFoundError(2, "No such file or directory", str(self))
+        return real(self, other)
+
+    monkeypatch.setattr(Path, "samefile", flaky)
+    async with Client(server) as c:
+        r = await c.call_tool("rename_note",
+                              {"vault": git_vault.name, "old_path": "Beta.md", "new_path": "Gamma.md"})
+    assert "Alpha.md" in r.data["files"] and "Ghost.md" not in r.data["files"]
+    assert (git_vault / "Gamma.md").exists()
+
+
+async def test_rename_accepts_a_case_mismatched_old_path(server, git_vault, tmp_path):
+    probe = tmp_path / "CaseProbe"
+    probe.write_text("x")
+    if not (tmp_path / "caseprobe").exists():
+        pytest.skip("case-sensitive filesystem: 'beta.md' is not 'Beta.md' here")
+    async with Client(server) as c:
+        await c.call_tool("rename_note",
+                          {"vault": git_vault.name, "old_path": "beta.md", "new_path": "Gamma.md"})
+    assert (git_vault / "Gamma.md").exists()
+    assert not (git_vault / "Beta.md").exists()          # not re-created under its old name
+    assert "[[Gamma]]" in (git_vault / "Alpha.md").read_text()

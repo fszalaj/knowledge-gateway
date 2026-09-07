@@ -90,6 +90,11 @@ def _strip_jsonc(text: str) -> str:
     return "".join(out)
 
 
+def _dotted(parts) -> str:
+    """['pkg', 'mod.py'] -> 'pkg.mod'; a package's __init__.py is the package itself."""
+    return ".".join(parts[:-1] if parts[-1] == "__init__.py" else parts[:-1] + [parts[-1][:-3]])
+
+
 class ImportResolver:
     """Maps import specifiers to first-party ``module:<rel>`` nodes; built once per graph.
 
@@ -107,36 +112,28 @@ class ImportResolver:
     # ---------------------------------------------------------------- Python
     def _build_py_index(self) -> dict:
         """dotted module path -> rel, under both the root and root.name (parent-on-path)."""
-        idx: dict[str, str] = {}
-        rels = sorted(self.rels)  # sorted -> deterministic when foo.py and foo/__init__.py coexist
-
-        def dotted_of(parts) -> str:
-            return ".".join(parts[:-1] if parts[-1] == "__init__.py" else parts[:-1] + [parts[-1][:-3]])
-
-        for rel in rels:  # pass 1: exact spellings
-            if not rel.endswith(".py"):
-                continue
-            dotted = dotted_of(rel.split("/"))
-            if not dotted:
-                continue
-            idx.setdefault(dotted, rel)
-            idx.setdefault(f"{self._anchor}.{dotted}", rel)
-
-        # Pass 2, never before pass 1: a src-layout import is written from the top-most
-        # package dir down (`src/pkg/mod.py` is imported as `pkg.mod`), but that spelling
-        # is inferred, so it may only fill a name no real path already claims - otherwise
-        # an `examples/pkg/mod.py` would shadow the actual `pkg/mod.py`.
-        for rel in rels:
+        exact: dict[str, str] = {}
+        inferred: dict[str, str] = {}
+        for rel in sorted(self.rels):  # sorted -> deterministic when foo.py and foo/__init__.py coexist
             if not rel.endswith(".py"):
                 continue
             parts = rel.split("/")
-            for i in range(1, len(parts) - 1):
-                if f"{'/'.join(parts[:i + 1])}/__init__.py" in self.rels:
-                    tail = dotted_of(parts[i:])
-                    if tail:
-                        idx.setdefault(tail, rel)
-                    break
-        return idx
+            dotted = _dotted(parts)
+            if not dotted:
+                continue
+            exact.setdefault(dotted, rel)
+            inferred.setdefault(f"{self._anchor}.{dotted}", rel)
+            # The one inferred layout worth guessing: with the setuptools src-layout only
+            # `src/` is on sys.path, so `src/pkg/mod.py` is imported as `pkg.mod`. No other
+            # prefix is inferred - stripping up to any directory that happens to hold an
+            # __init__.py invents `sub.mod` for a plain `pkg/sub/mod.py`, and lets an
+            # `examples/pkg` shadow the real `pkg`. No __init__.py is required here, so a
+            # namespace package under src/ keeps its full dotted path.
+            if parts[0] == "src" and len(parts) > 1:
+                tail = _dotted(parts[1:])
+                if tail:
+                    inferred.setdefault(tail, rel)
+        return {**inferred, **exact}  # an exact path always wins over an inferred one
 
     def resolve_py_abs(self, dotted: str | None) -> str | None:
         """`import a.b.c` -> rel of that module/package, or None if not first-party."""

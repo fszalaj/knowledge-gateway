@@ -25,7 +25,7 @@ MAX_NOTE_BYTES = 10 * 1024 * 1024  # read_note guard against a pathological huge
 # One note the gateway cannot read must never fail a whole-vault iteration. RuntimeError
 # is in the tuple because that is what Path.resolve() raises for a symlink loop up to
 # Python 3.12 (3.13 raises OSError); UnicodeDecodeError is a ValueError.
-_UNREADABLE = (OSError, ValueError, RuntimeError)
+_UNREADABLE = (OSError, UnicodeDecodeError, RuntimeError)
 
 # Only the gateway's own deliberate, client-facing failures (by message prefix) are
 # surfaced as ToolError when details are masked; unexpected OS/git errors stay hidden.
@@ -284,14 +284,12 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
     def convert_to_markdown(vault: str, path: str) -> str:
         """Convert a document in the vault to Markdown text: PDF, Office, image, HTML, CSV,
         EPUB, Outlook message, audio or video. Refuses any other type (`not_convertible`),
-        hidden and out-of-vault paths, and files over the 25 MiB cap."""
+        hidden and out-of-vault paths, and files over 50 MiB."""
         v = _vault(vault, write=False)
         target = v.safe_convert_path(path)  # contained; doc types beyond the attachment allowlist
         if not target.is_file():
             raise FileNotFoundError(f"not_found: {path}")
-        if target.stat().st_size > MAX_ATTACHMENT_BYTES:
-            raise ValueError(f"too_large: {path} is over {MAX_ATTACHMENT_BYTES // (1024 * 1024)} MiB")
-        return convertmod.to_markdown(target)
+        return convertmod.to_markdown(target)  # enforces its own 50 MiB cap
 
     # build scans a source tree (outside the vault) - a deliberate local action, so it is
     # only exposed in local stdio mode where the trust boundary is local filesystem access.
@@ -450,13 +448,17 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
                     # must not abort a rename across the whole vault.
                     p = v.safe_note_path(rel)
                     text = p.read_text(encoding="utf-8")
+                    # Which entry IS the note being moved, decided before the move: the
+                    # same file (a case-mismatched old_path spells the same note on a
+                    # case-insensitive filesystem) under the same name. A hardlink shares
+                    # the inode but has its own name, and must be rewritten in place.
+                    is_src = (p.samefile(src) and p.parent == src.parent
+                              and p.name.lower() == src.name.lower())
                 except _UNREADABLE:
                     continue
                 new_text, n = edits.rewrite_wikilinks(text, old_stem, new_stem)
                 if n:
-                    # samefile, not ==: on a case-insensitive filesystem a case-mismatched
-                    # old_path would otherwise re-create the note under its old name.
-                    planned.append((p, new_text, n, p.samefile(src)))
+                    planned.append((p, new_text, n, is_src))
 
         # PASS 2: move, then apply the planned rewrites (the source's own links land in
         # the moved file at its new path).
@@ -465,9 +467,9 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
         touched: list[str] = []
         total = 0
         for p, new_text, n, is_src in planned:
-            # The moved note is the one whose own name is gone; a hardlink shares src's
-            # inode (so samefile is true) but keeps its name, and must be written in place.
-            target = dst if is_src and not p.exists() else p
+            if not is_src and not p.exists():
+                continue  # deleted from under us between the scan and the write
+            target = dst if is_src else p
             atomic_write(target, new_text)
             touched.append(target.relative_to(v.path).as_posix())
             total += n

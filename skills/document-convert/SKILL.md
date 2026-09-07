@@ -15,7 +15,7 @@ Use `list_vaults` and `convert_to_markdown`. If durable storage is requested, us
 - Prefer the core or graph-only install on servers that do not need conversion; PDF and Office support adds a materially larger parser dependency tree.
 - The gateway allowlists the types it converts (PDF, Office, image, HTML, CSV, EPUB, Outlook, audio, video) and answers `not_convertible` for anything else. That allowlist is an access boundary, not a promise: actual format support is the installed MarkItDown converter set, so a permitted extension can still fail to convert.
 - Keep the original source immutable. Conversion is a derived representation, not a replacement.
-- The gateway rejects hidden or out-of-vault paths and files over 25 MiB.
+- The gateway rejects hidden or out-of-vault paths and files over 50 MiB.
 
 ## Procedure
 
