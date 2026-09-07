@@ -39,3 +39,17 @@ def test_toolerror_is_not_rewrapped():
 
     with pytest.raises(ToolError):
         f()
+
+
+def test_no_tool_is_async():
+    # _expected_to_tool_error wraps sync callables only: an async tool would hand back its
+    # coroutine before the wrapper could map the error, and the failure would be silent.
+    import ast
+    from pathlib import Path
+
+    tree = ast.parse((Path(__file__).resolve().parents[1] / "gateway" / "tools.py").read_text())
+    registered = [n for n in ast.walk(tree)
+                  if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                  and any(isinstance(d, ast.Name) and d.id in {"tool", "wtool"} for d in n.decorator_list)]
+    assert registered
+    assert [n.name for n in registered if isinstance(n, ast.AsyncFunctionDef)] == []

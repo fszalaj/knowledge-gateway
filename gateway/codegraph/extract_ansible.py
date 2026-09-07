@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 import os
+import posixpath
 import re
 from pathlib import Path
 
@@ -105,7 +106,7 @@ def extract(root: Path, exclude: frozenset[str] = frozenset(),
                                 if isinstance(v, ast.Name):
                                     edge(f"filter:{fname}", f"pyfunc:{rel}:{v.id}", "implemented_by")
 
-    def walk_tasks(tasks, owner, rel):
+    def walk_tasks(tasks, owner, rel, prefix=""):
         if not isinstance(tasks, list):
             return
         for i, t in enumerate(tasks):
@@ -113,16 +114,20 @@ def extract(root: Path, exclude: frozenset[str] = frozenset(),
                 continue
             for blk in ("block", "rescue", "always"):
                 if blk in t:
-                    walk_tasks(t[blk], owner, rel)
+                    # Nested tasks restart at 0, so without the parent's position in the id
+                    # a block's first task and the file's first task are one node.
+                    walk_tasks(t[blk], owner, rel, prefix=f"{prefix}{i}.{blk}.")
             name = t.get("name")
-            tid = f"task:{rel}:{i}:" + (name or "unnamed")[:40]
+            tid = f"task:{rel}:{prefix}{i}:" + (name or "unnamed")[:40]
             interesting = False
             for k in t:
                 if k in INCLUDE_TASKS:
                     spec = t[k]
                     f = spec.get("file") if isinstance(spec, dict) else spec
                     if isinstance(f, str):
-                        edge(owner, f"tasksfile:{(Path(rel).parent / f).as_posix()}", "include_tasks")
+                        # normpath: a `../common.yml` include must reach the real file node
+                        target = posixpath.normpath(posixpath.join(posixpath.dirname(rel), f))
+                        edge(owner, f"tasksfile:{target}", "include_tasks")
                         interesting = True
                 if k in INCLUDE_ROLE:
                     spec = t[k]
@@ -134,13 +139,13 @@ def extract(root: Path, exclude: frozenset[str] = frozenset(),
             for h in ([nt] if isinstance(nt, str) else nt or []):
                 if isinstance(h, str):
                     node(tid, label=name or "unnamed", type="task", file_type="ansible",
-                         source_file=rel, source_location=f"#{i}")
+                         source_file=rel, source_location=f"#{prefix}{i}")
                     edge(tid, f"handler:{h}", "notifies")
                     interesting = True
             used = {m for s in _iter_strings(t) for m in _FILTER_RE.findall(s) if m in filter_names}
             for fn in used:
                 node(tid, label=name or "unnamed", type="task", file_type="ansible",
-                     source_file=rel, source_location=f"#{i}")
+                     source_file=rel, source_location=f"#{prefix}{i}")
                 edge(tid, f"filter:{fn}", "calls_filter")
             if (interesting or used) and tid in nodes:
                 edge(owner, tid, "has_task")

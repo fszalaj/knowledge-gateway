@@ -69,6 +69,14 @@ pinning straight from git. Every release is also an immutable `vX.Y.Z` tag for p
   nodes or edges says so.
 - **`graph_neighbors(direction=...)` is validated.** An unsupported value silently returned
   the centre node alone; the parameter is now an enum in the tool schema.
+- **`read_attachment` reports the file's real media type.** Everything that is not an image
+  arrived as `application/<extension>` - a `.mp3` as `application/mp3` - and its resource URI
+  repeated the extension (`song.mp3.mp3`). The type is now derived from the filename, and the
+  URI is the bare filename rather than the server's absolute path.
+- **Ansible tasks inside `block` / `rescue` / `always` are their own nodes.** Nested task lists
+  restart at index 0, so a block's first task and the file's first task shared an id whenever
+  they shared a name, and two tasks collapsed into one. `include_tasks` targets are normalised
+  too, so a `../` include reaches the real file node instead of a dangling one.
 - **The daily updater no longer strips a server's extras.** `deploy/auto-update.sh`
   reinstalled `knowledge-gateway==<version>` without `[graph,convert]`, so the first
   automatic update took the graph and conversion tools off a server that was installed
@@ -84,6 +92,13 @@ pinning straight from git. Every release is also an immutable `vX.Y.Z` tag for p
   `[graph-slim]` is the narrow one. `code-graph-explore` gained the Fabric node ids and
   relations, `gateway-operations` now describes the updater and the automated release the
   repository actually has, and the deploy units name PyPI rather than `@stable`.
+- **`gateway.server.repo_layout` is a function.** The vault/repository layout detection was
+  inline in `build_local_server`, where nothing could observe it: `git -C <vault>` reaches the
+  same repository either way, so its tests could only assert that a server object exists.
+- **Dead code removed**, as reported by the audit: `graph.graph_dir`, the unused `context`
+  parameter of the ripgrep wrapper (a no-op even when passed), and the async branch of the
+  error-mapping decorator, which no tool used - a test now fails if a tool ever becomes async.
+  The uninstalled-source version fallback says `0+unknown` instead of the long-deleted `0.2.0`.
 
 ## v0.11.0 - 2026-08-19
 

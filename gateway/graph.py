@@ -23,10 +23,6 @@ def _nx():
         raise ValueError("graph_unavailable: install the [graph] extra (networkx) to use graph tools")
 
 
-def graph_dir(vault_path: Path) -> Path:
-    return Path(vault_path) / GRAPH_DIRNAME
-
-
 def graph_file(vault_path: Path, name: str, *, must_exist: bool = True) -> Path:
     """Resolve <vault>/.graph/<name>.json, sanitised and contained inside the vault."""
     safe = name.strip().removesuffix(".json")

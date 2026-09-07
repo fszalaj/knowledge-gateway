@@ -47,3 +47,15 @@ def test_image_formats_normalize_jpg():
     # jpg -> jpeg so the FastMCP Image mime is image/jpeg, not the invalid image/jpg
     assert IMAGE_FORMATS[".jpg"] == "jpeg"
     assert IMAGE_FORMATS[".jpeg"] == "jpeg"
+
+
+async def test_read_attachment_reports_the_real_media_type(server, git_vault):
+    from fastmcp import Client
+    (git_vault / "song.mp3").write_bytes(b"ID3\x03\x00\x00\x00")
+    (git_vault / "doc.pdf").write_bytes(b"%PDF-1.4\n")
+    async with Client(server) as c:
+        for name, mime in (("song.mp3", "audio/mpeg"), ("doc.pdf", "application/pdf")):
+            r = await c.call_tool("read_attachment", {"vault": git_vault.name, "path": name})
+            res = r.content[0].resource
+            assert res.mimeType == mime                    # not application/<extension>
+            assert str(res.uri) == f"file:///{name}"       # no doubled extension, no server path

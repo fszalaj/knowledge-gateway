@@ -1,15 +1,17 @@
 from __future__ import annotations
 
+import base64
 import functools
-import inspect
 import json
+import mimetypes
 import os
 from pathlib import Path
 from typing import Literal
 
 from fastmcp.exceptions import ToolError
 from fastmcp.server.dependencies import get_access_token
-from fastmcp.utilities.types import File, Image
+from fastmcp.utilities.types import Image
+import mcp.types as mcp_types
 
 from . import acl, edits, gitops, links
 from . import tags as tagmod
@@ -42,19 +44,8 @@ _EXPECTED_EXC = (FileNotFoundError, FileExistsError, ValueError, PermissionError
 
 
 def _expected_to_tool_error(fn):
-    if inspect.iscoroutinefunction(fn):
-        @functools.wraps(fn)
-        async def awrap(*a, **k):
-            try:
-                return await fn(*a, **k)
-            except ToolError:
-                raise
-            except _EXPECTED_EXC as e:
-                if str(e).startswith(_EXPECTED_PREFIXES):
-                    raise ToolError(str(e)) from e
-                raise
-        return awrap
-
+    # Every tool here is sync. An async one would return its coroutine before this wrapper
+    # could see the exception, so test_no_tool_is_async guards that this stays true.
     @functools.wraps(fn)
     def wrap(*a, **k):
         try:
@@ -163,8 +154,8 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
     @tool
     def read_attachment(vault: str, path: str):
         """Read a binary attachment: an image returns as an inline Image; other types
-        (PDF, audio, video) return as a File. Refuses non-attachment paths and files
-        over the 25 MiB cap."""
+        (PDF, audio, video) return as an embedded resource carrying the file's real media
+        type. Refuses non-attachment paths and files over the 25 MiB cap."""
         v = _vault(vault, write=False)
         target = v.safe_attachment_path(path)
         if not target.is_file():
@@ -175,7 +166,17 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
         fmt = IMAGE_FORMATS.get(target.suffix.lower())
         if fmt:
             return Image(data=data, format=fmt)
-        return File(data=data, format=target.suffix.lower().lstrip("."), name=target.name)
+        # Built here rather than via fastmcp's File, which derives the media type from the
+        # extension as `application/<ext>` - so a .mp3 arrived as `application/mp3` and its
+        # URI doubled the extension. The URI stays the bare filename: the server's absolute
+        # path is not the client's business, least of all in shared mode.
+        mime = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
+        return mcp_types.EmbeddedResource(
+            type="resource",
+            resource=mcp_types.BlobResourceContents(
+                uri=f"file:///{target.name}", mimeType=mime,
+                blob=base64.b64encode(data).decode()),
+        )
 
     @tool
     def list_canvases(vault: str, subdir: str | None = None, limit: int = 200) -> list[str]:

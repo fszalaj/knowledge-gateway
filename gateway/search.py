@@ -36,7 +36,6 @@ def ripgrep(
     regex: bool = False,
     limit: int = 50,
     max_limit: int = 1000,
-    context: int = 0,
     timeout: int = 20,
     ignore_case: bool = False,
 ) -> list[dict]:
@@ -46,8 +45,6 @@ def ripgrep(
     cmd = ["rg", "--json", "-i" if ignore_case else "-S"]
     if not regex:
         cmd.append("--fixed-strings")
-    if context:
-        cmd += ["-C", str(context)]
     for g in EXCLUDE_GLOBS:
         cmd += ["--glob", g]
     # Notes only — never surface non-markdown files; -m bounds per-file output.
