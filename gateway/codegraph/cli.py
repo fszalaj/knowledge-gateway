@@ -40,9 +40,12 @@ def main(argv: list[str] | None = None) -> int:
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    from .. import __version__, manifest
+    side = manifest.write(out, data.get("graph", {}), Path(args.source), __version__)
     g = data.get("graph", {})
     print(f"built: {g.get('node_count')} nodes, {g.get('edge_count')} edges, "
           f"{g.get('communities')} communities (tree-sitter: {g.get('treesitter_available')}) -> {out}")
+    print(f"provenance: {side.name}")
     return 0
 
 

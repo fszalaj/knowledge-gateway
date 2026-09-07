@@ -139,7 +139,7 @@ Open the repo in your agent, approve the `wiki` server once, done.
 | `delete_note` | delete a note (+ optional commit) |
 | `rename_note` | rename/move + rewrite inbound flat `[[wikilinks]]` when the name changes (+ optional commit) |
 | `git_status` / `git_commit` | pending changes / commit (subdir-scoped, attributed) |
-| `list_graphs` / `graph_query` / `graph_neighbors` / `god_nodes` / `graph_shortest_path` / `graph_stats` | query a built code graph |
+| `list_graphs` / `graph_query` / `graph_neighbors` / `god_nodes` / `graph_shortest_path` / `graph_stats` | query a built code graph. `list_graphs` and `graph_stats` also report where each snapshot came from - the revision, the build time, and whether the file still matches its manifest |
 | `graph_build` | build a code graph from a source tree into `.graph/<name>.json` (local mode only) |
 | `convert_to_markdown` | convert a document in the vault to Markdown (needs `[convert]`). Allowlisted types only - PDF, Office, image, HTML, CSV, EPUB, Outlook, audio/video - so a token that may read notes cannot read an arbitrary file that happens to sit in a vault; anything else is `not_convertible` |
 
@@ -243,6 +243,12 @@ rather than structure, and a wrong guess there is an edge that looks authoritati
 knowledge-gateway-graph /path/to/code-repo -o /path/to/vault/.graph/myrepo.json
 # in a local-mode session the graph_build tool does the same, writing .graph/<name>.json
 ```
+
+Both write a `<name>.meta.yaml` sidecar beside the snapshot: the source revision, the build
+time and the snapshot's SHA-256. A graph is a snapshot and cannot refuse to be stale, so
+`graph_stats` and `list_graphs` hand that provenance back with every answer - including
+`snapshot_matches`, which turns false if the snapshot changed after its manifest was written.
+The sidecar holds no absolute path, only the source directory's basename.
 
 Hidden directories (`.git`, `.next`, `.venv`, caches, ...) and common build/vendor output
 (`node_modules`, `dist`, `build`, `target`, `vendor`, ...) are always skipped.

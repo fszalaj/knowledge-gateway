@@ -87,3 +87,13 @@ def test_graph_build_rejects_unknown_language_names(tmp_path):
     (tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
     with pytest.raises(ValueError, match="graph_invalid: unknown language"):
         build_graph(tmp_path, languages=["js"])
+
+
+def test_cli_writes_the_provenance_sidecar(tmp_path):
+    from gateway import manifest
+    from gateway.codegraph import cli
+    (tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
+    out = tmp_path / "g" / "graph.json"
+    assert cli.main([str(tmp_path), "-o", str(out)]) == 0
+    prov = manifest.read(out)
+    assert prov["status"] == "ok" and prov["snapshot_matches"] is True

@@ -12,6 +12,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from . import manifest
+
 GRAPH_DIRNAME = ".graph"
 
 
@@ -39,6 +41,7 @@ def graph_file(vault_path: Path, name: str, *, must_exist: bool = True) -> Path:
 
 
 def list_graphs(vault_path: Path) -> list[dict]:
+    """Graphs in the vault, each with its counts and the provenance of its snapshot."""
     base = Path(vault_path).resolve()
     d = base / GRAPH_DIRNAME
     if not d.is_dir():
@@ -52,8 +55,11 @@ def list_graphs(vault_path: Path) -> list[dict]:
             meta = g.get("graph", {}) if isinstance(g, dict) else {}
         except Exception:
             meta = {}
+        prov = manifest.read(p)
         out.append({"name": p.stem, "nodes": meta.get("node_count"),
-                    "edges": meta.get("edge_count"), "communities": meta.get("communities")})
+                    "edges": meta.get("edge_count"), "communities": meta.get("communities"),
+                    "revision": prov.get("revision"), "built_at": prov.get("built_at"),
+                    "provenance": prov["status"]})
     return out
 
 
@@ -150,4 +156,5 @@ def stats(vault_path: Path, name: str) -> dict:
         raise ValueError(f"graph_invalid: {name}: {e}")
     if not isinstance(data, dict) or not isinstance(data.get("nodes"), list) or not isinstance(data.get("links"), list):
         raise ValueError(f"graph_invalid: {name}: not a node-link graph")
-    return data.get("graph", {})
+    # A snapshot cannot refuse to be stale, so what it was built from travels with it.
+    return {**data.get("graph", {}), "provenance": manifest.read(p)}

@@ -7,6 +7,16 @@ pinning straight from git. Every release is also an immutable `vX.Y.Z` tag for p
 
 ## Unreleased
 
+### Added
+- **A built graph says where it came from.** `graph_build` and `knowledge-gateway-graph` now
+  write a `<name>.meta.yaml` sidecar - source revision, build time, builder version and the
+  snapshot's SHA-256 - and `graph_stats` and `list_graphs` return it with every answer. A graph
+  is a snapshot: it cannot refuse to be stale, and the reader had no way to tell a fresh one
+  from a snapshot of a revision that no longer exists. `snapshot_matches` turns false when the
+  snapshot changed after its manifest was written, and a missing or unreadable manifest is
+  reported as such rather than silently omitted. The sidecar records the source directory's
+  basename, never an absolute path, because these fields reach clients in shared mode.
+
 ### Changed
 - **Agent guidance: a session-harness reference and a `CLAUDE.md` alias.** `AGENTS.md` now points
   substantive work at the installed personal `session-harness` skill, records where this

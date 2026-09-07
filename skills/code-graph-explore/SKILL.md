@@ -9,7 +9,7 @@ Use a validated graph as a navigation aid, then confirm every load-bearing concl
 
 ## Procedure
 
-1. Call `list_graphs` and select the intended graph. Call `graph_stats` and state its known provenance limits.
+1. Call `list_graphs` and select the intended graph. Call `graph_stats` and read its `provenance`: the revision the snapshot was built from, when, and `snapshot_matches`. State that revision with any conclusion, and treat `missing`, `unreadable` or a false `snapshot_matches` as unknown freshness rather than as current.
 2. Call `graph_query` to resolve modules, classes, functions, methods, roles, tasks, handlers, filters, resources, or external modules. Keep every plausible match until the source disambiguates it.
 3. Record exact node IDs. Python uses `module:`, `pyclass:`, `pyfunc:`, and `pymethod:`; Ansible adds `role:`, `tasksfile:`, `task:`, `handler:`, `playbook:`, and `filter:`. Tree-sitter definitions use `<language>:<path>:<name>#L<line>`. Microsoft Fabric adds `fabric:<Type>:<name>`, `fabricactivity:<pipeline>/<activity>`, `fabrictable:<model>/<table>` and `fabricmeasure:<model>/<table>/<measure>`, related by `contains`, `depends_on`, `invokes`, `reads_model`, `has_table`, `has_measure` and `implemented_by`. Unresolved imports use `extmodule:`.
 4. Call `graph_neighbors(direction=out, depth=1)` for dependencies and `graph_neighbors(direction=in, depth=1)` for dependants. Use `both` for orientation and increase depth only when necessary.

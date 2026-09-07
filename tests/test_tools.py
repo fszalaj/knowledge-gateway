@@ -209,3 +209,20 @@ async def test_rename_accepts_a_case_mismatched_old_path(server, git_vault, tmp_
     assert (git_vault / "Gamma.md").exists()
     assert not (git_vault / "Beta.md").exists()          # not re-created under its old name
     assert "[[Gamma]]" in (git_vault / "Alpha.md").read_text()
+
+
+async def test_graph_build_writes_provenance_that_graph_stats_reports(server, git_vault, tmp_path):
+    pytest.importorskip("networkx")
+    src = tmp_path / "tree"
+    src.mkdir()
+    (src / "a.py").write_text("def a():\n    return 1\n")
+    async with Client(server) as c:
+        built = await c.call_tool("graph_build", {"vault": git_vault.name, "source": str(src),
+                                                  "name": "kg"})
+        stats = await c.call_tool("graph_stats", {"vault": git_vault.name, "name": "kg"})
+        listed = await c.call_tool("list_graphs", {"vault": git_vault.name})
+    assert built.data["provenance"] == "kg.meta.yaml"
+    prov = stats.data["provenance"]
+    assert prov["status"] == "ok" and prov["snapshot_matches"] is True
+    assert prov["source_root"] == "tree" and prov["builder"].startswith("knowledge-gateway ")
+    assert [g["provenance"] for g in listed.data if g["name"] == "kg"] == ["ok"]

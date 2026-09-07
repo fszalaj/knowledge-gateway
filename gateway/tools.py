@@ -246,7 +246,8 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
     # ---- code graph (read-only over <vault>/.graph/<name>.json) ----
     @tool
     def list_graphs(vault: str) -> list[dict]:
-        """List the built code graphs available for a vault (under .graph/)."""
+        """List the built code graphs available for a vault (under .graph/), each with its
+        counts and the revision its snapshot was built from."""
         v = _vault(vault, write=False)
         return graphmod.list_graphs(v.path)
 
@@ -277,7 +278,10 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
 
     @tool
     def graph_stats(vault: str, name: str = "default") -> dict:
-        """Metadata for a built code graph (counts, languages, communities)."""
+        """Metadata for a built code graph: counts, communities, and the `provenance` of the
+        snapshot - the revision it was built from, when, and whether the file still matches
+        the manifest. A graph is a snapshot; treat a mismatch or a missing manifest as
+        unknown freshness, not as fresh."""
         v = _vault(vault, write=False)
         return graphmod.stats(v.path, name)
 
@@ -309,9 +313,14 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
             out.parent.mkdir(exist_ok=True)
             atomic_write(out, json.dumps(data, ensure_ascii=False))
             g = data.get("graph", {})
+            # The snapshot records what it was built from, so a later query can say how old
+            # its answer is instead of leaving that to a note somebody has to remember.
+            from . import __version__, manifest
+            manifest.write(out, g, src, __version__)
             return {"vault": vault, "graph": out.stem, "source": str(src),
                     "nodes": g.get("node_count"), "edges": g.get("edge_count"),
-                    "communities": g.get("communities"), "treesitter": g.get("treesitter_available")}
+                    "communities": g.get("communities"), "treesitter": g.get("treesitter_available"),
+                    "provenance": manifest.path_for(out).name}
 
     @tool
     def git_status(vault: str) -> dict:
