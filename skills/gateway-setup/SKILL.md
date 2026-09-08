@@ -6,6 +6,7 @@ description: Configure knowledge-gateway for a repository, select the required o
 # Knowledge Gateway setup
 
 Configure the gateway without replacing existing MCP servers or committing secrets.
+Local stdio mode needs no listening network endpoint or VPN.
 
 ## Choose the capability set
 
@@ -47,7 +48,13 @@ If auto-detection is ambiguous, replace `--local` with `--vault ./<vault-directo
 
 ## Shared mode
 
-Use shared HTTP mode only behind HTTPS or a trusted tailnet. It requires a per-user bearer token and per-vault ACL. Never write a token into the repository, a skill, an issue, or a chat transcript.
+Shared HTTP mode needs an endpoint reachable by the intended clients, a per-user bearer
+token, and per-vault ACL. Protect remote transport with an HTTPS reverse proxy, encrypted
+SSH tunnel, or encrypted VPN. Keep the gateway bound to loopback when the proxy or tunnel
+runs on the same host; restrict network access to intended clients and never expose plaintext
+HTTP directly to the public internet. Tailscale Serve is one optional deployment recipe,
+not a requirement. Network protection does not replace bearer tokens or vault ACLs.
+Never write a token into the repository, a skill, an issue, or a chat transcript.
 
 ## Completion gate
 

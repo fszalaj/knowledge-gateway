@@ -49,12 +49,13 @@ transport, authentication/ACL, vault loading, and error masking.
 | | **Local mode** (per repo) | **Shared server** (team) |
 |---|---|---|
 | Use when | a repo wants its own vault for its agents | many people/vaults behind one always-on endpoint |
-| Transport | stdio subprocess (launched by `.mcp.json`) | HTTP (put behind Tailscale/HTTPS) |
+| Transport | stdio subprocess (launched by `.mcp.json`) | HTTP over HTTPS or an encrypted SSH tunnel/VPN |
 | Secrets / tokens | **none** - nothing to generate | per-user bearer tokens (admin-generated) |
-| Trust boundary | local filesystem access you already have | tailnet + HTTPS + per-vault ACL |
+| Trust boundary | local filesystem access you already have | protected transport + per-user bearer token + per-vault ACL |
 | Obsidian needed | no | no |
 
-Most repos want **Local mode**. The shared server is only for a central, always-on team gateway.
+Most repos want **Local mode**. It needs no listening network endpoint or VPN. The shared
+server is for a central, always-on team gateway; Tailscale is optional.
 
 ## Distribution - PyPI ("update once")
 
@@ -290,24 +291,34 @@ A token sees only the vaults in its `vaults` list; anything else returns an opaq
 `vault_forbidden`. `vaults.yaml` + `tokens.yaml` are gitignored.
 
 **3. Run** - `uv run knowledge-gateway` (127.0.0.1:8765, path `/mcp/`). For a team box, run it as
-a service behind Tailscale Serve - see `deploy/` and *Operate* below.
+a service - see `deploy/` and *Operate* below. Make the endpoint reachable to the intended
+clients through an HTTPS reverse proxy, an encrypted SSH tunnel, or an encrypted VPN.
+Keep the gateway bound to loopback when the proxy or tunnel runs on the same host.
+For a VPN, route access through the protected network and restrict the endpoint to intended
+clients. Do not expose the gateway's plaintext HTTP listener directly to the public internet.
+[Tailscale Serve](deploy/tailscale.md) is one optional deployment recipe; no particular
+network provider is required.
 
-**4. Connect** - the admin shares the token over a password manager (not chat):
+**4. Connect** - the admin shares the token over a password manager (not chat). Replace this
+example HTTPS endpoint with the address provided by your proxy or protected tunnel/VPN:
 
 ```bash
 claude mcp add --transport http --scope project teamwiki \
-  https://YOUR-HOST.<tailnet>.ts.net/mcp/ --header "Authorization: Bearer $GW_TOKEN"
+  https://gateway.example.com/mcp/ --header "Authorization: Bearer $GW_TOKEN"
 ```
 
 ## Security model
 
 - **No secrets in the repo.** `vaults.yaml` / `tokens.yaml` are gitignored; only
   `*.example.yaml` ship. `tokens.yaml` is refused at load if group/world-readable.
-- **Local mode has no credential surface** - a local stdio subprocess; the trust boundary is
-  filesystem access the user already has.
-- **Server mode is defense in depth, not a public endpoint** - tailnet ACL + HTTPS + per-user
-  `StaticTokenVerifier` bearer token + per-vault ACL. The bearer layer is a shared secret for
-  use **behind a trusted tailnet**; do not expose the server publicly.
+- **Local mode has no credential surface** - a local stdio subprocess with no listening
+  network endpoint or VPN requirement; the trust boundary is filesystem access the user already has.
+- **Server mode requires protected remote transport and application access control** - use
+  HTTPS through a reverse proxy or carry HTTP inside an encrypted SSH tunnel/VPN. Every user
+  still needs a `StaticTokenVerifier` bearer token and per-vault ACL; network protection does
+  not replace either. Protect bearer tokens in transit and at rest, and restrict network access
+  to intended clients. Keep a same-host proxy or tunnel's upstream listener on loopback;
+  never expose plaintext HTTP directly to the public internet. Tailscale is optional.
 - **Path guards on all note I/O** via `safe_note_path` (traversal, symlink, hidden/dotfiles
   incl. `.env`, non-`.md`, `.git`/`.obsidian`). Search/backlinks/tags are bounded to `*.md`.
 - **Server-mode error masking** - the HTTP server runs `mask_error_details=True`: only the

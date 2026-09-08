@@ -1,8 +1,12 @@
-# Exposing the shared-server gateway over Tailscale
+# Optional deployment: expose the shared-server gateway over Tailscale
 
-The gateway listens on `127.0.0.1:8765` only. Tailscale Serve is the private
-HTTPS front door - reachable **inside the tailnet only**, never the public
-internet (that would be `tailscale funnel`, which we do NOT use).
+This recipe uses Tailscale Serve as one option for protected remote access. Tailscale is
+not a gateway requirement: an HTTPS reverse proxy, encrypted SSH tunnel, or another encrypted
+VPN can provide the transport instead. See the [shared server requirements](../README.md#shared-server-mode).
+
+In this recipe, the gateway listens on `127.0.0.1:8765` only. Tailscale Serve is the private
+HTTPS front door - reachable **inside the tailnet only**. This recipe does not use
+`tailscale funnel` to expose an internet endpoint.
 
 ## 1. Serve it (auto-TLS + MagicDNS)
 
@@ -38,5 +42,5 @@ claude mcp add --transport http --scope project teamwiki \
   --header "Authorization: Bearer $GW_TOKEN"
 ```
 
-Three independent layers guard the endpoint: tailnet ACL (network) +
+In this deployment, three independent layers guard the endpoint: tailnet ACL (network) +
 HTTPS (transport) + per-user bearer/ACL (application).

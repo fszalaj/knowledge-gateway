@@ -2,7 +2,8 @@
 # Install: uv tool install 'knowledge-gateway[graph,convert]'
 #   cp {vaults,tokens}.example.yaml ~/knowledge-gateway/ (edit; chmod 0600 tokens.yaml)
 #   cp deploy/knowledge-gateway.service ~/.config/systemd/user/ && systemctl --user enable --now knowledge-gateway
-#   loginctl enable-linger $USER   # Tailscale Serve fronts the loopback bind.
+#   loginctl enable-linger $USER
+# Front the loopback listener with an HTTPS proxy or SSH tunnel; Tailscale Serve is optional.
 
 [Unit]
 Description=Obsidian MCP gateway (filesystem/git-native)
