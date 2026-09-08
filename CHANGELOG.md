@@ -7,6 +7,8 @@ pinning straight from git. Every release is also an immutable `vX.Y.Z` tag for p
 
 ## Unreleased
 
+## v0.12.0 - 2026-09-08
+
 ### Added
 - **A built graph says where it came from.** `graph_build` and `knowledge-gateway-graph` now
   write a `<name>.meta.yaml` sidecar - source revision, build time, builder version and the
@@ -19,6 +21,7 @@ pinning straight from git. Every release is also an immutable `vX.Y.Z` tag for p
   basename, never an absolute path, because these fields reach clients in shared mode.
 
 ### Changed
+- Update the locked `tree-sitter-language-pack` dependency to 1.16.1.
 - **Agent guidance: a session-harness reference and a `CLAUDE.md` alias.** `AGENTS.md` now points
   substantive work at the installed personal `session-harness` skill, records where this
   repository's durable context and handoffs live, and `CLAUDE.md` is a relative symlink to it, so

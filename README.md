@@ -63,7 +63,7 @@ re-pinning anything by hand.
 
 ```mermaid
 flowchart LR
-    PR[merge PR to main] --> CI[green ci on main]
+    PR[merge version bump PR to main] --> CI[green ci on main]
     CI --> REL["release.yml<br/>publish PyPI + tag vX.Y.Z"]
     REL --> C["Consumers<br/>uvx --refresh knowledge-gateway<br/>(updates next session)"]
     REL --> S["Servers<br/>daily uv tool reinstall<br/>(restart if the version moved)"]
@@ -362,6 +362,9 @@ Releasing is a version bump, nothing else. `release.yml` watches for a **green `
 `main`** whose `pyproject.toml` version has no tag yet, and then does the rest by itself:
 build, publish to PyPI (Trusted Publishing, no token), create the `vX.Y.Z` GitHub Release -
 which is what creates the tag - and move `stable` onto it.
+
+Merging code without a version bump leaves it unreleased. The release workflow can finish
+successfully while skipping publication when that version's tag and `stable` already exist.
 
 1. Move `Unreleased` changelog entries into the new version section and bump the version in
    `pyproject.toml` and `server.json`.
