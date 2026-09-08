@@ -17,7 +17,7 @@ Durable context: `README.md` is the entry point, this file is the engineering co
 
 ## Required engineering practices
 
-- Work on a short-lived branch and open a pull request. Do not push directly to `main` or move `stable` as part of ordinary development.
+- Work on a short-lived branch and open a pull request. Do not push directly to `main` or create release tags as part of ordinary development. Distribution uses PyPI; the retired `stable` branch must not be recreated.
 - Preserve local/server mode parity unless the difference is an explicit security boundary.
 - Keep every filesystem path contained within its configured vault. Never weaken traversal, symlink, hidden-file, attachment-size, or ACL checks.
 - Mutating operations must remain atomic, lock-protected, pathspec-scoped, and attributable to the requesting identity.
