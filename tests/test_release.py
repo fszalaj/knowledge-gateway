@@ -118,11 +118,14 @@ def test_retry_pins_tag_source(repo, dry_run):
     assert release.git("rev-parse", "HEAD").decode().strip() == (later if dry_run else original)
 
 
-def test_dry_run_does_not_write_workflow_files(repo, monkeypatch, capsys):
+@pytest.mark.parametrize("host_event", ["push", "pull_request", "workflow_run"])
+def test_dry_run_does_not_write_workflow_files(repo, monkeypatch, capsys, host_event):
+    monkeypatch.setenv("GITHUB_EVENT_NAME", host_event)
+    monkeypatch.setenv("GITHUB_REF_NAME", "main")
     monkeypatch.setattr(release, "Client", lambda _: FakeClient())
     monkeypatch.setenv("GITHUB_OUTPUT", str(repo / "output"))
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(repo / "summary"))
-    monkeypatch.setattr("sys.argv", [str(SCRIPT), "decision", "--dry-run"])
+    monkeypatch.setattr("sys.argv", [str(SCRIPT), "decision", "--event", "workflow_run", "--dry-run"])
     assert release.main() == 0
     assert json.loads(capsys.readouterr().out)["release"]
     assert not (repo / "output").exists() and not (repo / "summary").exists()
