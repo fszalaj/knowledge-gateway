@@ -8,9 +8,7 @@ Persistent installations update through their configured updater or an explicit 
 ## Unreleased
 
 ### Documentation
-- Clarify that Tailscale is optional: local stdio needs no network listener or VPN, while
-  shared HTTP requires protected remote transport, per-user bearer tokens, and vault ACLs.
-  Document HTTPS reverse proxies and encrypted SSH tunnels/VPNs as transport options.
+- Focus setup documentation on Gateway interfaces, per-user authentication, and vault ACLs.
 
 ## v0.12.0 - 2026-09-08
 
