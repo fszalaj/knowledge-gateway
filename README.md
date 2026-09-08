@@ -82,18 +82,14 @@ flowchart LR
 | Ref | What it is |
 |---|---|
 | `main` | development and the latest release. Every release is cut from a green `ci` here |
-| `stable` | the release channel. **Today it is the latest release**, moved by `release.yml` on every publish, so `main` and `stable` name the same commit right after a release |
 | `vX.Y.Z` | immutable tag per release, for a frozen or auditable pin |
 
-`stable` is kept as a separate ref on purpose. It costs one step per release now, and it is the
-place to slow down later: when releases need soaking before they reach consumers, `stable` stops
-tracking every publish and starts lagging `main` by whatever vetting we decide on - without any
-consumer having to change a pin. Anything already pinned to `@stable` keeps working through that
-change; that is the whole point of the indirection.
-
-PyPI is the recommended channel (`--from 'knowledge-gateway[graph]'`). Use `@stable` only when
-you must install straight from git:
-`uvx --refresh --from 'knowledge-gateway[graph] @ git+https://github.com/fszalaj/knowledge-gateway@stable' knowledge-gateway`.
+The `stable` compatibility branch is retired with v0.12.0. Existing `@stable` requirements
+must migrate to PyPI, preserving their extras and server arguments:
+`uvx --refresh --from 'knowledge-gateway[graph]' knowledge-gateway --local`.
+Persistent servers use `uv tool install 'knowledge-gateway[graph,convert]'` and their configured
+updater. Pin `==X.Y.Z` for a fixed package version. Running development `main` does not track
+published releases.
 
 ## Quickstart - local mode (zero secrets)
 
@@ -360,23 +356,27 @@ Update now instead of waiting for the timer:
 
 Releasing is a version bump, nothing else. `release.yml` watches for a **green `ci` run on
 `main`** whose `pyproject.toml` version has no tag yet, and then does the rest by itself:
-build, publish to PyPI (Trusted Publishing, no token), create the `vX.Y.Z` GitHub Release -
-which is what creates the tag - and move `stable` onto it.
+build, publish to PyPI (Trusted Publishing, no token), then create the `vX.Y.Z` GitHub Release
+and immutable tag. No distribution branch is created or moved.
 
 Merging code without a version bump leaves it unreleased. The release workflow can finish
-successfully while skipping publication when that version's tag and `stable` already exist.
+successfully while skipping publication when the version's tag, published GitHub Release and
+matching PyPI artifacts already exist.
 
 1. Move `Unreleased` changelog entries into the new version section and bump the version in
    `pyproject.toml` and `server.json`.
 2. Run `uv lock` so the lockfile carries the new version, plus the skill validator and the test
    suite. Open a PR; merge only after the Python 3.11-3.13 CI matrix is green.
-3. Watch the `release` run. Verify PyPI, the GitHub Release, and that `stable` moved.
+3. Watch the `release` run. Verify the source commit, immutable tag and matching wheel/sdist
+   digests on PyPI and the GitHub Release.
 
-The tag is created **after PyPI publishing**, then `stable` moves to that tag. Verify all three
-before calling the release complete. A re-run heals a half-finished release: PyPI publishing is
-`skip-existing`, an existing
-GitHub Release is left alone, and `stable` is fast-forwarded to the tag. Pushing a `vX.Y.Z` tag
-by hand still works and takes the same path, asserting the tag matches the packaged version.
+The tag is created **after PyPI publishing**. GitHub assets use the verified bytes downloaded
+from PyPI, with their runtime sources checked against the release tree. An incomplete tagged
+release resumes from that tag; published assets with conflicting digests are refused.
+If PyPI has the version but its tag is absent, automatic publication stops. Inspect the original
+workflow and its source evidence before recovering the immutable tag and retrying. A later
+commit must not claim an already published version. Pushing a `vX.Y.Z` tag by hand remains
+supported and checks that the tag matches the packaged version.
 
 Consumers pick it up next session; servers within a day (or restart now).
 

@@ -2,12 +2,19 @@
 
 All notable changes to knowledge-gateway. Consumers track the **PyPI** package
 (`uvx --refresh --from knowledge-gateway`); each release auto-propagates on next launch (no
-per-repo re-pin). The `stable` git branch is a permanent alias for the same release, for
-pinning straight from git. Every release is also an immutable `vX.Y.Z` tag for pinning/audit.
+per-repo re-pin). Every release is also an immutable `vX.Y.Z` tag for pinning/audit.
+Persistent installations update through their configured updater or an explicit reinstall.
 
 ## Unreleased
 
 ## v0.12.0 - 2026-09-08
+
+### Breaking
+- Retire the `stable` compatibility branch. Replace git `@stable` requirements with
+  `uvx --refresh --from 'knowledge-gateway[graph]' knowledge-gateway --local`, preserving any
+  existing extras and vault arguments. Persistent servers can use
+  `uv tool install 'knowledge-gateway[graph,convert]'`; pin `==X.Y.Z` for a fixed version.
+  Releases continue from green CI on `main` to PyPI and immutable tags.
 
 ### Added
 - **A built graph says where it came from.** `graph_build` and `knowledge-gateway-graph` now
@@ -21,6 +28,9 @@ pinning straight from git. Every release is also an immutable `vX.Y.Z` tag for p
   basename, never an absolute path, because these fields reach clients in shared mode.
 
 ### Changed
+- Release completion checks PyPI and GitHub artifacts without a moving branch. GitHub receives
+  verified PyPI bytes, incomplete tagged releases resume from their source tag, and conflicting
+  published artifacts or a PyPI version without a source tag stop for investigation.
 - Update the locked `tree-sitter-language-pack` dependency to 1.16.1.
 - **Agent guidance: a session-harness reference and a `CLAUDE.md` alias.** `AGENTS.md` now points
   substantive work at the installed personal `session-harness` skill, records where this

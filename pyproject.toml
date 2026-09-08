@@ -14,7 +14,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
     "Topic :: Text Processing :: Markup :: Markdown",
 ]
-# Upper bounds matter: consumers run this exact gateway via `uvx --from git+...@<ref>`
+# Upper bounds matter: consumers resolve the published gateway through `uvx --from`
 # with no lockfile of their own, so a future fastmcp/pyyaml/ruamel MAJOR could silently
 # break the pinned gateway on a fresh resolve. Bound to the current major; widen
 # deliberately after testing. The committed uv.lock pins the exact transitive tree.
