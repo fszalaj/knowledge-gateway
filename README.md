@@ -372,8 +372,9 @@ successfully while skipping publication when that version's tag and `stable` alr
    suite. Open a PR; merge only after the Python 3.11-3.13 CI matrix is green.
 3. Watch the `release` run. Verify PyPI, the GitHub Release, and that `stable` moved.
 
-The tag is created **last**, so its presence means the release finished. A re-run heals a
-half-finished release rather than skipping it: PyPI publishing is `skip-existing`, an existing
+The tag is created **after PyPI publishing**, then `stable` moves to that tag. Verify all three
+before calling the release complete. A re-run heals a half-finished release: PyPI publishing is
+`skip-existing`, an existing
 GitHub Release is left alone, and `stable` is fast-forwarded to the tag. Pushing a `vX.Y.Z` tag
 by hand still works and takes the same path, asserting the tag matches the packaged version.
 
