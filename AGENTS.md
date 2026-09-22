@@ -1,6 +1,6 @@
 # Agent engineering guide
 
-Claude Code 2.1.277+ reads `AGENTS.md` natively; keep the built-in `agents-md` plugin enabled.
+`AGENTS.md` is canonical; `CLAUDE.md` is a relative symlink to it for compatible instruction loading.
 
 This repository is a security-sensitive Python/FastMCP service. Treat the vault and code-graph layers as trust boundaries, not convenience wrappers.
 
