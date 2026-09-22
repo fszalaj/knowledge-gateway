@@ -1,5 +1,7 @@
 # Agent engineering guide
 
+`AGENTS.md` is canonical; `CLAUDE.md` is a relative symlink to it for compatible instruction loading.
+
 This repository is a security-sensitive Python/FastMCP service. Treat the vault and code-graph layers as trust boundaries, not convenience wrappers.
 
 ## Start here
