@@ -6,7 +6,7 @@ A single MCP server that gives agents (Claude Code, Codex, Cursor, Copilot, Anti
 three capabilities over one connection:
 
 - **Vault** - read, search, and **edit** a git-backed Markdown/Obsidian vault (no Obsidian GUI), git as the source of truth.
-- **Code graph** - build and query a knowledge graph of a repo: definitions, imports and calls across ~30 languages (TypeScript/JavaScript, Go, Rust, Java, C#, C/C++, Ruby, PHP, Kotlin, Swift, Terraform/HCL and more) plus Python, and a dedicated Ansible pass for roles, tasks, handlers and `notify` edges. AST-only, local, no LLM.
+- **Code graph** - build and query a knowledge graph of a repo: definitions, imports and calls across ~30 languages (TypeScript/JavaScript, Go, Rust, Java, C#, C/C++, Ruby, PHP, Kotlin, Swift, Terraform/HCL and more) plus Python, and dedicated passes for the files a grammar cannot read as structure: Ansible (roles, playbooks, inventories, templates), Microsoft Fabric, Azure Bicep, Docker and compose, Kubernetes manifests and Helm charts, GitHub Actions, Appsmith apps, and dependency manifests (pyproject, requirements, package.json, .NET projects, Galaxy). Names and references only, never values. AST-only, local, no LLM.
 - **Convert** *(`[convert]`)* - turn PDF / Office / image / HTML files into Markdown.
 
 Install `knowledge-gateway[graph]` - the vault tools and the code graph. `[convert]` is separate
@@ -206,8 +206,8 @@ pull a materially larger, native-extension dependency tree:
 
 | Install | What you get |
 |---|---|
-| `[graph]` | the code graph and its query tools, over **every supported language**: a tree-sitter pass across ~30 grammars (JS/TS/TSX, Go, Rust, Java, C#, C/C++, Ruby, PHP, bash, PowerShell, Terraform/HCL, Lua, Kotlin, Swift, Scala, R, Perl, Elixir, Clojure, Dart, SQL, Groovy, Julia, Solidity, Haskell, OCaml) plus Python via the stdlib `ast` and a dedicated Ansible pass, plus dedicated Ansible and Microsoft Fabric passes |
-| `[graph-slim]` | the same tools with **only** the two dependency-free extractors, Python and Ansible. Pick this only when the target really is Python/Ansible and the parser pack is not worth its size |
+| `[graph]` | the code graph and its query tools, over **every supported language**: a tree-sitter pass across ~30 grammars (JS/TS/TSX, Go, Rust, Java, C#, C/C++, Ruby, PHP, bash, PowerShell, Terraform/HCL, Lua, Kotlin, Swift, Scala, R, Perl, Elixir, Clojure, Dart, SQL, Groovy, Julia, Solidity, Haskell, OCaml) plus Python via the stdlib `ast`, plus the dedicated passes below (Ansible, Microsoft Fabric, Azure Bicep, Docker, Kubernetes/Helm, GitHub Actions, Appsmith, dependency manifests) |
+| `[graph-slim]` | the same tools with **only** the dependency-free extractors: Python and every dedicated pass below (they need the stdlib and PyYAML, never tree-sitter). Pick this only when the parser pack is not worth its size; without it, bash, PowerShell, C# and the other grammars get no definitions, though a dedicated pass still emits the `module:<rel>` node of a script it references |
 | `[graph-all]` | alias of `[graph]`, kept so older pins keep resolving |
 | `[convert]` | attachment -> Markdown via MarkItDown; opt-in PDF and Office parsers add a materially larger dependency tree, including native-extension packages |
 | `[all]` | `[graph]` + `[convert]` in one pin - the whole toolset, and the string to use when a config should not drift apart from what the CLI has installed |
@@ -232,6 +232,115 @@ exports.
 
 Deliberately absent: notebook -> lakehouse table lineage. That needs heuristics over Spark code
 rather than structure, and a wrong guess there is an edge that looks authoritative and is not.
+
+### Infrastructure, CI and app passes
+
+The same idea covers the rest of a deployment repository. Each of these is a repo-level pass
+(stdlib + PyYAML only, so it runs under `[graph-slim]` too), and they share one contract:
+
+- **Names, never values.** No variable, parameter or environment *value*, no default, no
+  Secret `data`, no datasource URL, header or body, no inventory variable reaches the graph -
+  only the names and keys that give it structure. Each pass has a test that plants a unique
+  secret-looking value everywhere a value can sit and asserts it appears nowhere in the output.
+- **One id per file.** When a pass references a file another pass owns, it uses that pass's id
+  (`module:<rel>` for code and scripts, `playbook:<rel>`, `dockerfile:<rel>`, `manifest:<rel>`,
+  `project:<rel>`), so a CI job, the script it runs and the image that script builds are one
+  path through the graph, not three islands.
+- **Structure only.** No template evaluation (Helm, Jinja, Bicep, `${{ }}`), no network, no
+  registry lookup, no subprocess. Directories are pruned with the rule above, walks are sorted,
+  a symlink is never followed out of the root, files over 2 MiB are skipped, and a malformed
+  or unreadable file is skipped rather than failing the build. Heuristic edges are `INFERRED`.
+
+`graph_stats` reports which passes ran in `passes`, with the number of nodes each one emitted
+(`-1` when a pass raised on input it did not foresee: its output is left out and the build
+goes on). The graph keeps one edge per pair of nodes; when a pair is related in more than one
+way (a stage that copies a script and then runs it), the edge lists every relation in
+`relations`, and `graph_neighbors` returns that list too.
+
+**Ansible** - extended beyond roles:
+
+| Read | Emitted |
+|---|---|
+| any `*.yml`/`*.yaml` list whose plays carry `hosts` or `import_playbook` | `playbook:<rel>`, `imports_playbook`, `targets` -> the inventory group or host a play names (`INFERRED` when no inventory here defines it) |
+| `template` / `copy` tasks | `renders_template` -> `template:<rel>`, `copies_file` -> `file:<rel>` (or the `module:<rel>` of copied code), resolved the way Ansible searches |
+| INI and YAML inventories | `invgroup:<name>`, `invhost:<name>`, `member_of`, `child_of` |
+| `group_vars/` and `host_vars/` | `vars:<rel>` -> `configures` the group or host; the files are never parsed |
+
+Absent: every variable name and value, `[x:vars]`, inline host variables, `copy: content:`,
+vault payloads (a `!vault` tag parses to nothing), dynamic inventory and host-pattern evaluation.
+
+**Azure Bicep**:
+
+| Read | Emitted |
+|---|---|
+| `*.bicep` | `bicep:<rel>`, and per declaration `bicepparam:`, `bicepoutput:`, `bicepresource:` (nested `parent::child` included, with resource type and API version), `bicepmodule:`; `uses_module` -> `bicep:<rel>` or `extbicep:<registry ref>`, `imports`, `child_of`, `depends_on` (`EXTRACTED` from `dependsOn`, `INFERRED` from symbolic references) |
+| `*.bicepparam` | `parameterizes` -> its `using` template, `extends`, `sets_param` -> the template param it assigns (the name, never the value) |
+| `getSecret(...)`, `@Microsoft.KeyVault(...)`, secret URLs | `reads_secret` -> `kvsecret:<vault>/<secret>` by name |
+| `az deployment ... create\|what-if\|validate`, `az stack`, `New-/Test-Az*Deployment` in scripts | `deploys` from the script's `module:<rel>` to the template and parameter file, with `operations` |
+
+Absent: param defaults, `.bicepparam` assignments, var bodies, property values, descriptions,
+tags; no compilation and no registry lookup.
+
+**Docker and compose**:
+
+| Read | Emitted |
+|---|---|
+| `Dockerfile`, `Containerfile`, `*.Dockerfile`, `Dockerfile.*` | `dockerfile:<rel>`, `dockerstage:<rel>#<stage>`, `based_on` -> `extimage:<name[:tag]>` or a prior stage, `copies` / `copies_from`, `runs` -> the copied file an `ENTRYPOINT`/`CMD`/`RUN` executes |
+| `compose*.y[a]ml`, `docker-compose*.y[a]ml` | `compose:<rel>`, `composeservice:<rel>#<service>`, `uses_image`, `builds_from`, `targets_stage`, `depends_on`, `mounts` (bind mounts), `uses_env_file` |
+| `docker\|podman build/push` in scripts | `builds` (`INFERRED`: the build context is a guess) and `pushes` |
+
+Absent: `ENV`/`ARG`/`--build-arg`/`environment` values (names only), `env_file` contents (never
+read), labels, `RUN` text, secrets/configs, remote build contexts; `${VAR}` is never expanded.
+
+**Kubernetes and Helm**:
+
+| Read | Emitted |
+|---|---|
+| `Chart.yaml`, `Chart.lock`, `requirements.yaml` | `helmchart:<dir>`, `depends_on` -> a local chart or `exthelmchart:<repo>/<name>` (credentials stripped from repository URLs) |
+| chart `templates/**` (scanned tolerantly, never rendered) | `helmres:<chart>/<Kind>/<name>`, `renders`, `reads_value` -> `helmvalue:<chart>/<top-level key>` |
+| `values.yaml` and environment overlays | `helmvalues:<file>`, `default_values_of`, `overrides` (`INFERRED` from name and location), `defines_value` |
+| `helm install\|upgrade` in scripts | `helmrelease:<ns>/<name>`, `deploys` from the script's `module:<rel>`, `installs`, `uses_values` (with `-f` order) |
+| plain manifests and `kustomization.yaml` | `k8sres:<ns>/<Kind>/<name>`, `kustomization:<file>`, `includes`, `generates`, `selects` (`INFERRED` by labels), `routes_to`, `uses_secret` / `uses_configmap` / `uses_service_account` / `uses_pvc`, `binds_role`, `binds_subject` |
+
+Absent: Secret and ConfigMap data, env values, `--set` arguments, values-file values (top-level
+key names only), kustomize literals and `valuesInline`, labels; no Helm rendering, no remote
+bases. A YAML list (an Ansible playbook) is never read as a manifest.
+
+**GitHub Actions** (read from `.github/` directly, although the prune rule hides it; naming
+`.github` in `--exclude` turns the pass off):
+
+| Read | Emitted |
+|---|---|
+| `.github/workflows/*.y[a]ml` | `ghworkflow:<rel>`, `ghjob:<rel>#<job>`, `contains`, `depends_on` (`needs`), `calls_workflow` -> `ghworkflow:` or `extworkflow:` |
+| `uses:` | `uses_action` -> `ghaction:<dir>` (local) or `extaction:<owner>/<repo>` (the ref is an edge attribute) |
+| `${{ secrets.X }}`, `${{ vars.X }}` | `uses_secret` -> `ghsecret:<NAME>`, `uses_var` -> `ghvar:<NAME>` |
+| `run:` shell lines | `runs_script` (`INFERRED`) -> the `module:`, `playbook:` or `dockerfile:` node of the file it runs, `file:<rel>` otherwise |
+
+Absent: every `env:`, `with:`, matrix, input-default and environment-URL value, container and
+service images; no expression is evaluated and no remote action is fetched.
+
+**Appsmith** (a git-synced export, found by its `metadata.json` marker):
+
+| Read | Emitted |
+|---|---|
+| `application.json`, `pages/<page>/` | `appsmith:<app>`, `appsmithpage:<app>/<page>`, `contains`, `navigates_to` |
+| `widgets/**.json` | `appsmithwidget:<app>/<page>/<widget>` nested by parent (layout canvases collapsed) |
+| `queries/<q>/` and `datasources/` | `appsmithquery:` (plugin, HTTP method, the *shape* of the URL path: bindings and every segment that is not a plain word become `{}`, since tokens are often carried in the path), `appsmithdatasource:` (plugin only), `uses_datasource` |
+| `{{ }}` bindings and `jsobjects/` | `triggers` (`<Query>.run()`, `<JS>.<fn>()`), `reads` (`<Query>.data`), `references` (`INFERRED`), `implemented_by` -> the `.js` file's `module:<rel>` |
+
+Absent: datasource configuration (URLs, credentials, auth), headers, bodies, query parameters,
+hosts and query strings, widget text and defaults, JS code.
+
+**Dependency manifests**:
+
+| Read | Emitted |
+|---|---|
+| `pyproject.toml`, `requirements*.txt`, `package.json`, Galaxy `requirements.y[a]ml` | `manifest:<rel>`, `depends_on` -> `extpackage:<pypi\|npm\|galaxy>:<name>` (version specifier and scope as attributes), `includes` / `constrained_by` for `-r` / `-c` |
+| `*.csproj` (any `*proj`), `*.sln`, `*.slnx` | `project:<rel>`, `solution:<rel>`, `depends_on` -> `extpackage:nuget:<id>`, `references_project`, `contains` -> the `module:<rel>` of each `.cs` file (`INFERRED` from the SDK glob) |
+
+Absent: index URLs and other pip options, direct-reference and git URLs (reduced to the package
+name plus an `origin`), MSBuild property values such as `UserSecretsId`, lock files; nothing is
+resolved against a registry.
 
 **Build a graph** (AST-only - local, no network, no LLM) where the code lives:
 
@@ -258,8 +367,9 @@ in every supported language.
 
 Ansible gets its own extractor rather than a grammar, because a playbook is YAML: a parser sees
 mappings and lists, not structure. That pass reads the *semantics* - roles, tasks, handlers,
-`include_role` / `import_tasks` / `notify`, and `task -> filter plugin` edges - so an Ansible
-tree becomes a call graph like any other repo. Graph files live in the vault's `.graph/` and are vault-contained
+`include_role` / `import_tasks` / `notify`, `task -> filter plugin` edges, and the playbook,
+inventory and template wiring described above - so an Ansible tree becomes a call graph like
+any other repo. Graph files live in the vault's `.graph/` and are vault-contained
 (resolved + checked to stay inside the vault). Query tools are read-only; local `graph_build`
 deliberately creates or replaces the selected graph artifact. Vault note tools never depend on it.
 

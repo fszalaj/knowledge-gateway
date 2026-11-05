@@ -7,6 +7,56 @@ Persistent installations update through their configured updater or an explicit 
 
 ## Unreleased
 
+### Added
+- **The code graph reads infrastructure, CI and low-code repositories, not just code.** New
+  dedicated repo-level passes, all stdlib + PyYAML so they also run under `[graph-slim]`:
+  Azure Bicep (templates, `.bicepparam` files, modules, resources, Key Vault secret reads by
+  name, and the deployment scripts that run them), Docker and compose (stages, base images,
+  what is copied in and run, services, mounts, build and push scripts), Kubernetes and Helm
+  (charts, dependencies, values files and overlays, the releases `helm upgrade` scripts
+  install, plain manifests and kustomizations, and what resources reference), GitHub Actions
+  (workflows, jobs, actions, reusable workflows, secret and variable names, and the scripts
+  `run:` lines execute), Appsmith git-sync exports (pages, widgets, queries, datasources and
+  the bindings between them), and dependency manifests (pyproject, requirements, package.json,
+  .NET projects and solutions, Ansible Galaxy requirements). A pass that references a file
+  another pass owns uses that pass's id, so the graphs join.
+- The Ansible pass now finds playbooks anywhere in the tree, follows `import_playbook`, links
+  `template` / `copy` tasks to their source files, and reads INI and YAML inventories and
+  `group_vars` / `host_vars` (which group or host they configure, never their contents), so
+  `targets` edges show which hosts a play runs against.
+- Graph metadata gains `passes`: each dedicated pass that ran and how many nodes it emitted,
+  so `graph_stats` shows whether a pass found nothing or was never reached.
+
+### Security
+- Every new pass copies names, never values: no environment or build-arg values, parameter
+  defaults or assignments, Kubernetes Secret data, datasource URLs, credentials, headers or
+  bodies, or inventory variables reach a graph. Each pass is tested with a planted value that
+  must not appear anywhere in its output. An Appsmith query keeps only the shape of its URL
+  path: a segment that is not a plain word becomes `{}`, so a token carried in the path never
+  reaches the graph.
+- A hostile or broken file costs that file, never the build or the server: the Ansible pass
+  parses YAML with the pure-Python loader (libyaml crashed the process on deep nesting),
+  recursive YAML aliases and deeply nested JSON are skipped, alias-amplified work and output are
+  capped per file, regexes that were quadratic on unclosed delimiters are linear scans, COPY
+  wildcards never follow directory links, and `build_graph` reports a pass that still raises
+  as `-1` in `passes` instead of failing.
+
+### Changed
+- When two passes (or one) relate the same pair of nodes in two ways - a Docker stage that
+  copies a script and then runs it, a widget that runs a query and reads its data - the graph
+  keeps one edge, as before, but now lists every relation in its `relations` attribute instead
+  of silently keeping the last one. The primary `relation` is the first one written, unless a
+  later one is `EXTRACTED` and the first was only `INFERRED`.
+- `graph_neighbors` returns an edge's `relations` list when the pair carries more than one.
+- Ansible task ids in a playbook carry the play index and section
+  (`task:<rel>:<play>.<section>.<i>:<name>`): same-position, same-name tasks of different plays
+  or sections were one node. Task ids in a role's task files are unchanged.
+- `file:<rel>` nodes have one shape whichever pass writes them (label = basename, type `file`
+  or `directory`, file_type `file`), so merge order no longer changes a node's attributes.
+- The Ansible playbook rule is narrower: a root-level YAML list counts as a playbook only when
+  its plays carry `hosts` or `import_playbook`. Vault-tagged (`!vault`) values parse to nothing
+  instead of making the file unreadable.
+
 ### Documentation
 - Focus setup documentation on Gateway interfaces, per-user authentication, and vault ACLs.
 

@@ -10,7 +10,7 @@ Use the gateway's deterministic local graph builder. Extraction is AST/tree-sitt
 ## Preconditions
 
 - The gateway runs in local stdio mode when a graph must be built.
-- Install `[graph]` for every supported language, or `[graph-slim]` for Python and Ansible only.
+- Install `[graph]` for every supported language, or `[graph-slim]` for Python plus the dedicated passes only (Ansible, Fabric, Bicep, Docker, Kubernetes/Helm, GitHub Actions, Appsmith, dependency manifests), without tree-sitter definitions.
 - Choose a stable graph name, usually the repository slug.
 - `graph_build` is exposed only in local stdio mode. A shared HTTP server can query stored graphs but cannot scan an arbitrary source tree.
 
@@ -19,9 +19,9 @@ Use the gateway's deterministic local graph builder. Extraction is AST/tree-sitt
 1. Call `list_vaults` and select the vault that will store `.graph/<name>.json`.
 2. Call `list_graphs` to detect existing graphs. Each row carries the `revision` its snapshot was built from, the build time, and a `provenance` status.
 3. Compare that revision with the current source revision, and check `graph_stats` provenance: `missing` or `unreadable` means freshness is unknown, and `snapshot_matches: false` means the snapshot changed after its manifest was written. Rebuild in every one of those cases.
-4. Select `[graph]` when the broad tree-sitter pass is required, or `[graph-slim]` for Python and Ansible extraction only.
+4. Select `[graph]` when the broad tree-sitter pass is required, or `[graph-slim]` for Python and the dedicated repo-level passes only.
 5. In local mode call `graph_build(vault, source, name)` with an absolute or repository-relative source path.
-6. Call `graph_stats` and record node, edge, community, Python-file, tree-sitter-file, and tree-sitter-availability metadata, plus the provenance block. Building writes the `<name>.meta.yaml` sidecar next to the snapshot; do not hand-edit it, rebuild instead.
+6. Call `graph_stats` and record node, edge, community, Python-file, tree-sitter-file, and tree-sitter-availability metadata, the `passes` map (each dedicated pass that ran and its node count; 0 means it ran and found nothing), plus the provenance block. Building writes the `<name>.meta.yaml` sidecar next to the snapshot; do not hand-edit it, rebuild instead.
 7. Treat zero or unexpectedly low counts as a failed or incomplete build. Inspect direct source coverage before accepting the artifact.
 8. Hand the validated graph name and current source revision to `code-graph-explore` or `code-impact`.
 
