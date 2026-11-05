@@ -59,7 +59,7 @@ build-backend = "hatchling.build"
 packages = ["gateway", "gateway.codegraph"]
 
 [tool.hatch.build.targets.sdist]
-exclude = ["/.agents", "/.claude", "/.claude-plugin"]
+exclude = ["/.agents", "/.claude", "/.claude-plugin", "/repos/**"]
 
 # The canonical pack lives in .agents/skills; ship it at the unchanged in-archive path.
 [tool.hatch.build.targets.sdist.force-include]

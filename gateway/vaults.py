@@ -36,11 +36,11 @@ class Vault:
     """A markdown vault plus the git repo that backs it.
 
     `path` is where the notes live (the Obsidian vault root). `repo_root` is the
-    git repository root — equal to `path` when the vault is its own repo, or a
+    git repository root - equal to `path` when the vault is its own repo, or a
     parent when the vault is a subdirectory of a larger repo. `subdir` is the
     vault location relative to `repo_root`; git operations are pathspec-scoped to
     it, so when `subdir != "."` a commit touches only the vault and never sibling
-    code. (`subdir == "."` is only valid when `repo_root == path` — enforced at
+    code. (`subdir == "."` is only valid when `repo_root == path` - enforced at
     config load.)
     """
 
@@ -72,7 +72,7 @@ class Vault:
 
     def safe_join(self, rel: str) -> Path:
         # resolve() collapses ".." and follows symlinks, so a path escaping the
-        # vault — or a symlink pointing outside it — fails the containment check.
+        # vault - or a symlink pointing outside it - fails the containment check.
         target = (self.path / rel).resolve()
         if target == self.path or not target.is_relative_to(self.path):
             raise PermissionError(f"path_escape: {rel}")
@@ -87,7 +87,7 @@ class Vault:
         # The read/write surface is markdown notes only. Reject non-.md targets
         # and any hidden path component (.env, secrets, .git, .obsidian, ...), so
         # a granted token cannot reach a config/secret file that happens to sit
-        # inside a vault root — not just the EXCLUDE_DIRS set.
+        # inside a vault root - not just the EXCLUDE_DIRS set.
         target = self.safe_join(rel)
         if any(part.startswith(".") for part in target.relative_to(self.path).parts):
             raise PermissionError(f"path_hidden: {rel}")

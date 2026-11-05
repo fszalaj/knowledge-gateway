@@ -77,7 +77,7 @@ def commit(vault: Vault, message: str, author: tuple[str, str] | None = None,
     # even if unrelated paths happen to be staged in the same repo. The author is the
     # requesting user (the token's sub); the committer stays the service identity.
     # Per-user environment: both AUTHOR and COMMITTER are the requesting user, so
-    # every commit is fully attributed to whoever made it — the OS account the
+    # every commit is fully attributed to whoever made it - the OS account the
     # service runs as never appears in git history.
     env = None
     if author and author[0]:

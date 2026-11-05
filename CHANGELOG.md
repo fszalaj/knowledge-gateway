@@ -7,6 +7,19 @@ Persistent installations update through their configured updater or an explicit 
 
 ## Unreleased
 
+### Documentation
+- The README is shorter and written for someone deciding to use the gateway and setting it up.
+  The per-pass code graph reference moved to `docs/code-graph.md`, and distribution, server
+  operation and the release procedure moved to `docs/operations.md`. The architecture and release
+  diagrams stay in the README.
+- New "Onboarding with an AI agent" prompt in the README: the agent plans the onboarding with you
+  (prerequisites, vault, MCP configuration, source clones, code graphs, verification) and changes
+  nothing until you approve.
+- New `repos/` folder for local clones of the repositories a vault describes; its contents are
+  git-ignored (only `repos/README.md` is tracked) and excluded from the sdist.
+- `AGENTS.md` now forbids AI attribution and the em dash character; the em dashes in docs,
+  comments and messages were replaced.
+
 ## v0.13.0 - 2026-11-05
 
 ### Breaking

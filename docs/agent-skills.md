@@ -16,11 +16,11 @@ Paths were verified against the linked official documentation on 2026-08-17; no 
 
 | Client | Project-level discovery path | How this repository serves it | Official source |
 |---|---|---|---|
-| Codex | `.agents/skills` | native | [OpenAI — Build skills](https://developers.openai.com/plugins/build/skills) |
-| Gemini CLI | `.agents/skills` or `.gemini/skills` | native | [Gemini CLI — Managing Agent Skills](https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/using-agent-skills.md) |
-| Claude Code | `.claude/skills` | plugin manifest `.claude-plugin/plugin.json` pointing at `.agents/skills` | [Claude Code — Extend Claude with skills](https://code.claude.com/docs/en/skills) |
-| GitHub Copilot | `.agents/skills`, `.github/skills`, or `.claude/skills` | native | [GitHub Docs — About agent skills](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills) |
-| Cursor | `.agents/skills` or `.cursor/skills` | native | [Cursor Docs — Agent Skills](https://cursor.com/docs/skills#skill-directories) |
+| Codex | `.agents/skills` | native | [OpenAI: Build skills](https://developers.openai.com/plugins/build/skills) |
+| Gemini CLI | `.agents/skills` or `.gemini/skills` | native | [Gemini CLI: Managing Agent Skills](https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/using-agent-skills.md) |
+| Claude Code | `.claude/skills` | plugin manifest `.claude-plugin/plugin.json` pointing at `.agents/skills` | [Claude Code: Extend Claude with skills](https://code.claude.com/docs/en/skills) |
+| GitHub Copilot | `.agents/skills`, `.github/skills`, or `.claude/skills` | native | [GitHub Docs: About agent skills](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills) |
+| Cursor | `.agents/skills` or `.cursor/skills` | native | [Cursor Docs: Agent Skills](https://cursor.com/docs/skills#skill-directories) |
 
 Agent instructions use the same portable pattern. `AGENTS.md` is canonical and read natively by Codex and Copilot. `CLAUDE.md` is a regular file containing the import line `@AGENTS.md`, and `GEMINI.md` contains `@./AGENTS.md` (Gemini CLI resolves imports relative to the importing file).
 
@@ -37,7 +37,7 @@ claude plugin marketplace add ./ --scope local
 claude plugin install knowledge-gateway@knowledge-gateway --scope local
 ```
 
-With `--plugin-dir` the plugin is read in place, so skill edits are live. The persistent install registers the marketplace per OS user, so running it in a second clone re-points every clone; it records the clone's absolute path in `~/.claude/plugins/` and the git-ignored `.claude/settings.local.json`, and copies the working tree, untracked files included, into `~/.claude/plugins/cache/`. Do not commit a directory marketplace to `.claude/settings.json` (Claude Code cannot resolve a relative one) and do not use `marketplace add --scope project`, which writes an absolute path into that committed file. The plugin `version` tracks the package version in `pyproject.toml`; the test suite enforces that they match.
+With `--plugin-dir` the plugin is read in place, so skill edits are live. The persistent install registers the marketplace per OS user, so running it in a second clone re-points every clone; it records the clone's absolute path in `~/.claude/plugins/` and the git-ignored `.claude/settings.local.json`, and copies the working tree, untracked files included, into `~/.claude/plugins/cache/`. Do not keep secrets in the checkout when you install: a gitignored `tokens.yaml`, `vaults.yaml` or `.env` is copied into that cache too. Do not commit a directory marketplace to `.claude/settings.json` (Claude Code cannot resolve a relative one) and do not use `marketplace add --scope project`, which writes an absolute path into that committed file. The plugin `version` tracks the package version in `pyproject.toml`; the test suite enforces that they match.
 
 ### Copying skills into another repository
 
@@ -108,7 +108,7 @@ Install all optional capabilities when the full skill pack is required:
 }
 ```
 
-Use the dependency-free core command from the root README when only vault operations are needed. Pin an immutable release tag instead of `stable` for regulated or reproducible environments.
+When only vault operations are needed, use the core package with no optional extras: `"--from", "knowledge-gateway"` in place of `"knowledge-gateway[all]"`. For regulated or reproducible environments, pin a release (`knowledge-gateway[all]==X.Y.Z`) and drop `--refresh`.
 
 ## End-to-end engineering loop
 

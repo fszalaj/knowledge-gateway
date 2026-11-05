@@ -114,7 +114,7 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
             acl.authorize(_scopes(), name, write=write)
         v = vaults.get(name)
         if v is None:
-            # Token granted a vault that no longer exists — stay opaque.
+            # Token granted a vault that no longer exists - stay opaque.
             raise acl.AccessDenied(f"vault_forbidden: {name}")
         return v
 
@@ -227,7 +227,7 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
 
     @tool
     def search(vault: str, query: str, regex: bool = False, limit: int = 50) -> list[dict]:
-        """Search a vault with ripgrep — literal by default, regex when regex=true."""
+        """Search a vault with ripgrep - literal by default, regex when regex=true."""
         v = _vault(vault, write=False)
         return ripgrep(v.path, query, regex=regex, limit=limit)
 

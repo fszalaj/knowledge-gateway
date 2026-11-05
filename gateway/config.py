@@ -26,7 +26,7 @@ def load_vaults(path: Path | None = None) -> dict[str, Vault]:
     cfg = path or _resolve("KNOWLEDGE_GATEWAY_VAULTS", DEFAULT_VAULTS_FILE)
     if not cfg.exists():
         raise FileNotFoundError(
-            f"vaults config not found: {cfg} — copy vaults.example.yaml to vaults.yaml"
+            f"vaults config not found: {cfg} - copy vaults.example.yaml to vaults.yaml"
         )
     data = yaml.safe_load(cfg.read_text()) or {}
     vaults = {
@@ -55,7 +55,7 @@ def load_vaults(path: Path | None = None) -> dict[str, Vault]:
         for b in items[i + 1:]:
             if a.path == b.path or a.path.is_relative_to(b.path) or b.path.is_relative_to(a.path):
                 raise ValueError(
-                    f"vault paths overlap ('{a.name}', '{b.name}') — grants would leak across them"
+                    f"vault paths overlap ('{a.name}', '{b.name}') - grants would leak across them"
                 )
     return vaults
 
@@ -64,10 +64,10 @@ def load_tokens(path: Path | None = None) -> dict:
     cfg = path or _resolve("KNOWLEDGE_GATEWAY_TOKENS", DEFAULT_TOKENS_FILE)
     if not cfg.exists():
         raise FileNotFoundError(
-            f"tokens config not found: {cfg} — copy tokens.example.yaml to tokens.yaml"
+            f"tokens config not found: {cfg} - copy tokens.example.yaml to tokens.yaml"
         )
     # Secrets file: refuse to load if it is group/world-accessible. The docs tell
-    # admins to `chmod 0600`, but nothing enforced it — a 0644 tokens.yaml would
+    # admins to `chmod 0600`, but nothing enforced it - a 0644 tokens.yaml would
     # silently expose every bearer token to other local users.
     if os.name == "posix":
         mode = cfg.stat().st_mode & 0o777

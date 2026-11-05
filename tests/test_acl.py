@@ -35,7 +35,7 @@ def test_write_denied_for_readonly_token():
 def test_forbidden_message_is_opaque():
     with pytest.raises(acl.AccessDenied) as exc:
         acl.authorize(scopes("tok_team"), "ops", write=False)
-    # Same shape as a non-existent vault — existence is not revealed.
+    # Same shape as a non-existent vault - existence is not revealed.
     assert str(exc.value) == "vault_forbidden: ops"
 
 
@@ -50,7 +50,7 @@ def test_build_registry_rejects_string_vaults():
 
 
 def test_build_registry_rejects_non_bool_write():
-    # `write: "false"` is a string — must not be accepted as truthy write access.
+    # `write: "false"` is a string - must not be accepted as truthy write access.
     with pytest.raises(ValueError):
         acl.build_registry({"t": {"sub": "x", "vaults": ["a"], "write": "false"}})
 
