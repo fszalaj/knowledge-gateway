@@ -47,7 +47,7 @@ def ripgrep(
         cmd.append("--fixed-strings")
     for g in EXCLUDE_GLOBS:
         cmd += ["--glob", g]
-    # Notes only — never surface non-markdown files; -m bounds per-file output.
+    # Notes only - never surface non-markdown files; -m bounds per-file output.
     cmd += ["--glob", "*.md", "-m", str(limit)]
     cmd += ["--", pattern, str(root)]
 

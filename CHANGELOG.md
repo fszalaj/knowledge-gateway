@@ -7,6 +7,14 @@ Persistent installations update through their configured updater or an explicit 
 
 ## Unreleased
 
+### Documentation
+- The README is shorter and written for someone deciding to use the gateway and setting it up.
+  The per-pass code graph reference moved to `docs/code-graph.md`, and distribution, server
+  operation, the release procedure and the "set it up with an AI" prompt moved to
+  `docs/operations.md`.
+- `AGENTS.md` now forbids AI attribution and the em dash character; the em dashes in docs,
+  comments and messages were replaced.
+
 ## v0.13.0 - 2026-11-05
 
 ### Breaking

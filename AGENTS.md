@@ -27,6 +27,7 @@ Durable context: `README.md` is the entry point, this file is the engineering co
 - Optional capabilities must stay lazily imported so the core package remains usable without graph or conversion extras.
 - Add or update tests for behavioral changes. Run the full test suite before claiming completion.
 - Update `README.md` and `CHANGELOG.md` when user-visible behavior or operating procedures change.
+- No AI attribution anywhere: no AI co-author trailers, no "Generated with" lines and no robot emoji in commits, pull requests, docs or comments. Do not use the em dash character (U+2014); write " - ", a comma, a colon or parentheses instead.
 
 ## Validation
 
