@@ -60,6 +60,8 @@ def test_canonical_pack_is_a_real_directory_registered_in_its_manifest():
     # The pre-portable locations must not come back as placeholders or aliases.
     for retired in (ROOT / "skills", ROOT / ".claude" / "skills"):
         assert not retired.is_symlink() and not retired.is_file()
+    # Claude Code reads the pack as AGENTS.md instructs; there is no plugin manifest to keep in step.
+    assert not (ROOT / ".claude-plugin").exists()
 
 
 def test_instruction_files_are_regular_imports_of_agents_md():
@@ -99,24 +101,10 @@ def test_fixture_outside_any_checkout_is_not_a_git_failure(tmp_path, monkeypatch
     assert _validator_module().validate(_portable_fixture(tmp_path)) == []
 
 
-def test_claude_plugin_serves_the_canonical_pack_at_the_package_version():
-    version = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
-    plugin = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
-    assert plugin["name"] == "knowledge-gateway"
-    assert not plugin["name"].startswith(("claude-", "anthropic-"))
-    assert plugin["version"] == version
-    assert [(ROOT / ref).resolve() for ref in plugin["skills"]] == [(ROOT / ".agents" / "skills").resolve()]
-    market = json.loads((ROOT / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8"))
-    assert {"name": "knowledge-gateway", "source": "./"}.items() <= next(
-        entry for entry in market["plugins"] if entry["name"] == "knowledge-gateway"
-    ).items()
-
-
 def _portable_fixture(tmp_path):
     for name in ("AGENTS.md", "CLAUDE.md", "GEMINI.md", "pyproject.toml"):
         shutil.copy(ROOT / name, tmp_path / name)
     shutil.copytree(ROOT / ".agents" / "skills", tmp_path / ".agents" / "skills")
-    shutil.copytree(ROOT / ".claude-plugin", tmp_path / ".claude-plugin")
     return tmp_path
 
 
@@ -168,40 +156,6 @@ def test_validator_rejects_an_instruction_file_without_an_agents_import(tmp_path
     assert any(error.startswith("CLAUDE.md") for error in _validator_module().validate(root))
 
 
-@pytest.mark.parametrize("change,expected", [
-    ({"version": "0.0.0"}, "version must equal"),
-    ({"skills": ["./../outside/"]}, "escapes the repository"),
-    ({"skills": ["../outside/"]}, "must start with './'"),
-    ({"skills": ["./missing/"]}, "does not exist"),
-    ({"skills": ["./.claude-plugin/"]}, "must be ./.agents/skills/"),
-    ({"skills": []}, "must name the canonical skill pack"),
-    ({"skills": [".agents/skills/"]}, "must start with './'"),
-    ({"name": "other"}, "name must be"),
-])
-def test_validator_rejects_a_plugin_that_drifts_from_the_pack(tmp_path, change, expected):
-    root = _portable_fixture(tmp_path)
-    (tmp_path.parent / "outside").mkdir(exist_ok=True)
-    path = root / ".claude-plugin" / "plugin.json"
-    plugin = json.loads(path.read_text(encoding="utf-8"))
-    path.write_text(json.dumps({**plugin, **change}), encoding="utf-8")
-    assert any(expected in error for error in _validator_module().validate(root))
-
-
-@pytest.mark.parametrize("mutate,expected", [
-    (lambda m: m["plugins"][0].update(source="./plugins/knowledge-gateway"), "must list plugin"),
-    (lambda m: m.update(name="kg-renamed"), "marketplace.json name must be"),
-    (lambda m: m.pop("owner"), "owner.name"),
-    (lambda m: m.update(owner={"name": " "}), "owner.name"),
-])
-def test_validator_rejects_a_marketplace_claude_cannot_install_from(tmp_path, mutate, expected):
-    root = _portable_fixture(tmp_path)
-    path = root / ".claude-plugin" / "marketplace.json"
-    market = json.loads(path.read_text(encoding="utf-8"))
-    mutate(market)
-    path.write_text(json.dumps(market), encoding="utf-8")
-    assert any(expected in error for error in _validator_module().validate(root))
-
-
 @pytest.mark.parametrize("retired", ["skills", ".claude/skills"])
 def test_validator_rejects_retired_skill_locations(tmp_path, retired):
     root = _portable_fixture(tmp_path)
@@ -237,20 +191,20 @@ def _track(root, path, content=b"x", mode="100644"):
                     f"{mode},{blob},{path}"], check=True)
 
 
-@pytest.mark.parametrize("path", ["skills/wiki-query/SKILL.md", ".claude/skills/wiki-query/SKILL.md"])
+@pytest.mark.parametrize("path", ["skills/wiki-query/SKILL.md", ".claude/skills/wiki-query/SKILL.md",
+                                  ".claude-plugin/plugin.json"])
 def test_validator_rejects_tracked_files_in_retired_locations(tmp_path, path):
     root = _git_fixture(tmp_path)
     _track(root, path)
     assert any("is retired" in error for error in _validator_module().validate(root))
 
 
-@pytest.mark.parametrize("component", [".mcp.json", "hooks/hooks.json", "commands/review.md", "settings.json"])
-def test_validator_rejects_plugin_default_components_at_the_repository_root(tmp_path, component):
-    # The repository root is the plugin root: Claude Code would load these for every plugin user.
+@pytest.mark.parametrize("path", [".mcp.json", ".claude/settings.json"])
+def test_validator_allows_project_client_configuration(tmp_path, path):
+    # Without a plugin rooted here, a project .mcp.json or Claude Code settings file is ordinary config.
     root = _git_fixture(tmp_path)
-    _track(root, component)
-    assert any(error.startswith(component.split("/")[0]) and "plugin root" in error
-               for error in _validator_module().validate(root))
+    _track(root, path, b"{}")
+    assert _validator_module().validate(root) == []
 
 
 def test_validator_rejects_a_tracked_symlink(tmp_path):
@@ -292,8 +246,7 @@ def test_sdist_contains_canonical_skills_not_provider_aliases(tmp_path):
     # and the pack-relative manifest paths resolve there.
     assert any(name.endswith("/skills/wiki-query/SKILL.md") for name in names)
     assert all(f"{prefix}/skills/{entry['path']}" in names for entry in manifest["skills"])
-    assert not any("/.agents/" in name or "/.claude/" in name or "/.claude-plugin/" in name
-                   for name in names)
+    assert not any("/.agents/" in name or "/.claude/" in name for name in names)
 
 
 def test_convert_extra_installs_pdf_and_office_converters():

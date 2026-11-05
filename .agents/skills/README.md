@@ -1,6 +1,6 @@
 # knowledge-gateway agent skills
 
-These skills are reusable, provider-neutral operating playbooks for knowledge-gateway and its MCP tools. The canonical source is `.agents/skills/<name>/SKILL.md`, which Codex, Gemini CLI, GitHub Copilot and Cursor discover natively; Claude Code loads the same directory through the repository plugin in `.claude-plugin/`. Other repositories copy selected directories into a supported project-level path. See [`docs/agent-skills.md`](https://github.com/fszalaj/knowledge-gateway/blob/main/docs/agent-skills.md) for the dated, sourced compatibility table and the Claude Code plugin setup. The source distribution ships this pack under `skills/`; paths in `manifest.json` are relative to the pack directory, so they hold in both places.
+These skills are reusable, provider-neutral operating playbooks for knowledge-gateway and its MCP tools. The canonical source is `.agents/skills/<name>/SKILL.md`, which Codex, Gemini CLI, GitHub Copilot and Cursor discover natively; Claude Code reads the same files as `AGENTS.md` instructs. Other repositories copy selected directories into a supported project-level path. See [`docs/agent-skills.md`](https://github.com/fszalaj/knowledge-gateway/blob/main/docs/agent-skills.md) for the dated, sourced compatibility table. The source distribution ships this pack under `skills/`; paths in `manifest.json` are relative to the pack directory, so they hold in both places.
 
 | Skill | Purpose |
 |---|---|

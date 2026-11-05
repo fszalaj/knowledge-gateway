@@ -7,7 +7,17 @@ Persistent installations update through their configured updater or an explicit 
 
 ## Unreleased
 
+### Changed
+- The Claude Code plugin manifests (`.claude-plugin/plugin.json` and `marketplace.json`) are
+  removed. Claude Code reads the skills the way `AGENTS.md` (imported by `CLAUDE.md`) instructs,
+  from `.agents/skills/<name>/SKILL.md`, so there is no plugin to install or keep in step with
+  the package version, and the `/knowledge-gateway:*` commands are gone. A root `.mcp.json` and
+  other Claude Code project files are allowed again; the validator now treats `.claude-plugin/`
+  as a retired path.
+
 ### Documentation
+- The README has a diagram of shared server mode: token check, per-vault access list, path
+  guards and attributed commits.
 - The README is shorter and written for someone deciding to use the gateway and setting it up.
   The per-pass code graph reference moved to `docs/code-graph.md`, and distribution, server
   operation and the release procedure moved to `docs/operations.md`. The architecture and release

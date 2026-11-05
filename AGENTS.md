@@ -43,9 +43,7 @@ For graph-related work, also inspect at least one built graph with `graph_stats`
 
 ## Agent skills
 
-Canonical provider-neutral skill files live in `.agents/skills/<name>/SKILL.md`, which Codex, Gemini CLI, GitHub Copilot and Cursor discover natively. Claude Code loads the same directory only after the user opts in to the repository plugin in `.claude-plugin/` (see "Agent skills" in `README.md`); when the `/knowledge-gateway:*` skills are not loaded, read `.agents/skills/<name>/SKILL.md` directly. Do not add symlinks or generated copies; copy selected skill directories into another client's documented project-level discovery directory.
-
-The repository root is the plugin root, so Claude Code would load a root-level `commands/`, `agents/`, `hooks/hooks.json`, `.mcp.json`, `.lsp.json`, `bin/`, `settings.json` or `output-styles/` for every plugin user. The validator rejects them; give the plugin its own root before adding one. A release bumps the version in `.claude-plugin/plugin.json` together with `pyproject.toml` and `server.json`.
+Canonical provider-neutral skill files live in `.agents/skills/<name>/SKILL.md`, which Codex, Gemini CLI, GitHub Copilot and Cursor discover natively. Claude Code does not scan that directory: when a task matches a skill listed below, read `.agents/skills/<name>/SKILL.md` and follow it. Do not add symlinks, generated copies or a plugin manifest; copy selected skill directories into another client's documented project-level discovery directory. A release bumps the version in `pyproject.toml` and `server.json` together.
 
 Use:
 
