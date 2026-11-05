@@ -23,6 +23,32 @@ Install `knowledge-gateway[graph]` for the vault and the code graph. Conversion 
 `[convert]` extra because its PDF and Office parsers pull in a much larger dependency tree;
 `[all]` gives you everything.
 
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph clients [Agents]
+        A1[Claude Code]
+        A2[Codex]
+        A3[Copilot - VS Code]
+        A4[Cursor]
+        A5[Antigravity - Gemini]
+    end
+    A1 --- M(( MCP ))
+    A2 --- M
+    A3 --- M
+    A4 --- M
+    A5 --- M
+    M -->|stdio, per repo, no auth| L[Local gateway]
+    M -->|HTTP + bearer + ACL| S[Shared gateway]
+    L --> V[/Vault: Markdown files/]
+    S --> V
+    V <-->|atomic write + scoped commit| G[(git)]
+```
+
+Both modes run the same tools over the same path guards; they differ in transport, authentication and
+access control, vault loading, and error masking.
+
 ## Quickstart (local mode)
 
 Local mode runs the gateway as a subprocess of your agent, for the repository you have open. It
@@ -159,6 +185,14 @@ authentication and how much error detail reaches the client.
   your git identity (local).
 
 ## Release
+
+```mermaid
+flowchart LR
+    PR[merge version bump PR to main] --> CI[green ci on main]
+    CI --> REL["release.yml<br/>publish PyPI + tag vX.Y.Z"]
+    REL --> C["Consumers<br/>uvx --refresh knowledge-gateway<br/>(updates next session)"]
+    REL --> S["Servers<br/>daily uv tool reinstall<br/>(restart if the version moved)"]
+```
 
 Releases go to PyPI. Consumers using `uvx --refresh` get a new release in their next session, and
 servers within a day. A release is cut by bumping the version on `main`; the workflow publishes
