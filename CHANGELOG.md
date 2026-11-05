@@ -7,6 +7,8 @@ Persistent installations update through their configured updater or an explicit 
 
 ## Unreleased
 
+## v0.13.0 - 2026-11-05
+
 ### Breaking
 - **The skill pack moved from `skills/<name>` to `.agents/skills/<name>` in the repository.**
   Update scripts, docs and links that copy from or point at `skills/...` in a clone or on GitHub
