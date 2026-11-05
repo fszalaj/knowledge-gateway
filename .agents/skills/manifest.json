@@ -63,6 +63,13 @@
       "requires": ["read_note", "write_note", "patch_note", "git_status", "git_commit"]
     },
     {
+      "name": "vault-roster",
+      "path": "vault-roster/SKILL.md",
+      "mode": "read-write",
+      "requires": ["search"],
+      "optional_requires": ["write_note", "patch_note", "git_status"]
+    },
+    {
       "name": "canvas",
       "path": "canvas/SKILL.md",
       "mode": "read-write",

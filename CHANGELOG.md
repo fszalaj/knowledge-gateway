@@ -7,6 +7,14 @@ Persistent installations update through their configured updater or an explicit 
 
 ## Unreleased
 
+### Added
+- Team vault kit for vaults built from a clone of this repository: `repos.example.txt` and
+  `team.example.txt` (templates for `repos.txt` and `team.txt`, with `# git-base:` and
+  `# github-team:` lines), `scripts/sync-repos.sh` and `scripts/sync-repos.ps1` (clone and
+  fast-forward the listed repositories into `repos/`, never forcing anything),
+  `scripts/roster_check.py` (compare both files with the GitHub team through `gh`) and the
+  `vault-roster` skill. The onboarding prompt asks whether the vault serves a team and uses them.
+
 ### Changed
 - The Claude Code plugin manifests (`.claude-plugin/plugin.json` and `marketplace.json`) are
   removed. Claude Code reads the skills the way `AGENTS.md` (imported by `CLAUDE.md`) instructs,

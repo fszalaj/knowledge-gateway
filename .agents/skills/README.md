@@ -14,6 +14,7 @@ These skills are reusable, provider-neutral operating playbooks for knowledge-ga
 | `wiki-ingest` | Turn source files and attachments into structured pages. |
 | `wiki-lint` | Validate vault consistency before merge. |
 | `wiki-fold` | Compact old log entries without losing history. |
+| `vault-roster` | Keep a team vault's `team.txt`, `repos.txt` and the pages that list them in step with its GitHub team. |
 | `document-convert` | Convert vault-contained documents and review Markdown fidelity. |
 | `canvas` | Build and edit Obsidian Canvas maps. |
 | `obsidian-markdown` | Author correct Obsidian-flavored Markdown. |

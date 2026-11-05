@@ -71,6 +71,7 @@ After copying skills, reload or restart the client and confirm that one skill is
 | `wiki-ingest` | Convert attachments and structure source knowledge | `[convert]` for conversion |
 | `wiki-lint` | Audit frontmatter, links, tags, indexes and attachments | core vault |
 | `wiki-fold` | Compact old append-only logs without losing history | writable vault |
+| `vault-roster` | Keep a team vault's `team.txt` and `repos.txt` in step with its GitHub team | writable vault, `gh` |
 | `canvas` | Build and update Obsidian Canvas maps | core vault |
 | `obsidian-markdown` | Author valid wikilinks, embeds, callouts and frontmatter | core vault |
 | `document-convert` | Convert vault-contained documents and review fidelity | `[convert]` |
