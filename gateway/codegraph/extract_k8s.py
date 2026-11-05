@@ -110,7 +110,7 @@ _HELM_VALUE_FLAGS = frozenset({
     "--timeout", "--description", "--post-renderer", "--post-renderer-args", "-o", "--output",
     "--ca-file", "--cert-file", "--key-file", "--username", "--password", "--registry-config",
     "--repository-cache", "--repository-config", "--history-max", "--name-template",
-    "--burst-limit", "--qps", "-l", "--labels",
+    "--burst-limit", "--qps", "-l", "--labels", "--keyring", "--kube-tls-server-name",
 })
 _HELM_BIN = frozenset({"helm", "helm.exe", "helm3"})
 _SEPARATORS = frozenset({"&&", "||", ";", "|", "&"})
