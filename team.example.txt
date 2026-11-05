@@ -1,0 +1,15 @@
+# Members of a team vault. Copy this file to team.txt in your vault repository and commit it.
+# Each member has a hot page wiki/hot.<login>.md and a profile wiki/team/<login>.md; agents resolve the session's
+# login against this list. scripts/roster_check.py compares it with the GitHub team named below.
+#
+# One member per line:  <github-login> <maintainer|member>
+#   github-login  exactly as GitHub spells it (case matters)
+#   maintainer    may change any member's hot page and profile, and the roster
+#   member        changes only their own hot page and profile
+#
+# The GitHub team this vault mirrors (or pass --team to roster_check.py):
+# github-team: <org>/<team-slug>
+#
+# Examples (replace them):
+# alice-example maintainer
+# bob-example member

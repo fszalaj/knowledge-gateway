@@ -55,6 +55,7 @@ Use:
 - `wiki-ingest` to convert source material into structured knowledge.
 - `wiki-lint` before a wiki-related pull request.
 - `wiki-fold` to compact an operation log without losing history.
+- `vault-roster` to keep a team vault's `team.txt`, `repos.txt` and the pages that list them in step with its GitHub team.
 - `canvas` for Obsidian Canvas maps.
 - `obsidian-markdown` whenever authoring vault pages.
 - `document-convert` to convert vault-contained source documents.

@@ -44,6 +44,7 @@ def test_bundled_agent_skills_are_present():
         "obsidian-markdown",
         "wiki-curate",
         "wiki-fold",
+        "vault-roster",
         "wiki-ingest",
         "wiki-lint",
         "wiki-query",

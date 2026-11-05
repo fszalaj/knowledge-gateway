@@ -1,0 +1,15 @@
+# Source repositories this vault describes. Copy this file to repos.txt in your vault repository and commit it.
+# scripts/sync-repos.sh (Linux, WSL, macOS) and scripts/sync-repos.ps1 (Windows) clone each one into repos/<name>/
+# (git-ignored) and fast-forward clean clones; scripts/roster_check.py compares the list with the GitHub team.
+#
+# One repository per line:  <name> <default_branch> [<extra_ref>...]
+#   name           repository name; the clone URL is <git-base><name>
+#   default_branch the branch the vault documents
+#   extra_ref      other branches to fetch as origin/<ref> (for example an in-flight feature branch)
+#
+# The clone base (or set REPOS_GIT_BASE):
+# git-base: https://github.com/<owner>/
+#
+# Examples (replace them):
+# my-service main
+# my-infrastructure main feature/next-release
