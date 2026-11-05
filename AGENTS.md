@@ -1,13 +1,13 @@
 # Agent engineering guide
 
-`AGENTS.md` is canonical; `CLAUDE.md` is a relative symlink to it for compatible instruction loading.
+`AGENTS.md` is canonical. `CLAUDE.md` (`@AGENTS.md`) and `GEMINI.md` (`@./AGENTS.md`) are regular files that import it, so every OS and every checkout loads the same instructions. The repository tracks no symlinks.
 
 This repository is a security-sensitive Python/FastMCP service. Treat the vault and code-graph layers as trust boundaries, not convenience wrappers.
 
 ## Start here
 
 1. Read `README.md`, then the relevant implementation and tests.
-2. For architecture or impact questions, use the bundled skills under `skills/`.
+2. For architecture or impact questions, use the bundled skills under `.agents/skills/`.
 3. Build or refresh a local code graph before broad refactors when the `[graph]` or `[graph-all]` extra is available.
 4. Keep changes narrow. Do not combine unrelated refactors, dependency upgrades, and documentation changes.
 
@@ -42,7 +42,9 @@ For graph-related work, also inspect at least one built graph with `graph_stats`
 
 ## Agent skills
 
-Canonical provider-neutral skill files live in `skills/<name>/SKILL.md`. `.agents/skills` and `.claude/skills` expose the same pack in this repository; copy selected skill directories into another client's documented project-level discovery directory.
+Canonical provider-neutral skill files live in `.agents/skills/<name>/SKILL.md`, which Codex, Gemini CLI, GitHub Copilot and Cursor discover natively. Claude Code loads the same directory only after the user opts in to the repository plugin in `.claude-plugin/` (see "Agent skills" in `README.md`); when the `/knowledge-gateway:*` skills are not loaded, read `.agents/skills/<name>/SKILL.md` directly. Do not add symlinks or generated copies; copy selected skill directories into another client's documented project-level discovery directory.
+
+The repository root is the plugin root, so Claude Code would load a root-level `commands/`, `agents/`, `hooks/hooks.json`, `.mcp.json`, `.lsp.json`, `bin/`, `settings.json` or `output-styles/` for every plugin user. The validator rejects them; give the plugin its own root before adding one. A release bumps the version in `.claude-plugin/plugin.json` together with `pyproject.toml` and `server.json`.
 
 Use:
 
@@ -60,4 +62,4 @@ Use:
 - `gateway-setup` and `gateway-operations` to configure, verify, operate, and release the gateway.
 - `cordis-composability` when reviewing reversible effects and declared dependencies.
 
-The manifest at `skills/manifest.json` is the machine-readable inventory and validation source.
+The manifest at `.agents/skills/manifest.json` is the machine-readable inventory and validation source.
