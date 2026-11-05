@@ -145,8 +145,12 @@ block traversal, symlink escape and access outside the configured vault.
 
 ## Agent skills
 
-The repository includes a validated, provider-neutral Agent Skills pack under `skills/`.
-`.agents/skills` and `.claude/skills` point to the same canonical files for native discovery.
+The repository includes a validated, provider-neutral Agent Skills pack under `.agents/skills/`,
+a real directory that Codex, Gemini CLI, GitHub Copilot and Cursor discover natively. Claude Code
+reads the same files through the repository plugin in `.claude-plugin/`. Agent instructions follow
+the same rule: `AGENTS.md` is canonical, and `CLAUDE.md` / `GEMINI.md` are regular files that
+import it. The repository tracks no symlinks, so a Windows checkout without Developer Mode (or any
+`core.symlinks=false` checkout) gets the full instructions and skills.
 Consumer repositories can instead own copies in their documented project-level directory.
 
 The pack covers:
@@ -160,14 +164,39 @@ The pack covers:
 - `cordis-composability` for reversible effects and declared dependencies.
 
 Skills add repeatable procedures, not privileges. Server-side ACLs, path guards, hooks and CI remain
-the enforcement layer. The machine-readable inventory is `skills/manifest.json`; CI validates that
-every skill is registered and references only real gateway tools.
+the enforcement layer. The machine-readable inventory is `.agents/skills/manifest.json`; CI
+validates that every skill is registered and references only real gateway tools, that the plugin
+manifest points at the pack at the package version, and that git tracks no symlinks. The source
+distribution keeps shipping the pack under `skills/`.
+
+**Claude Code quickstart.** Claude Code discovers project-level skills only in `.claude/skills`,
+so it loads this pack from the plugin manifest once you opt in; skills then appear as
+`/knowledge-gateway:<skill>`. From the repository root (recommended; the plugin is read in
+place, so skill edits apply immediately):
+
+```bash
+claude --plugin-dir .
+```
+
+A persistent install is possible when you keep exactly one clone per OS user:
+
+```bash
+claude plugin marketplace add ./ --scope local
+claude plugin install knowledge-gateway@knowledge-gateway --scope local
+```
+
+The marketplace registration is per OS user, not per clone: running these commands in a second
+clone re-points the plugin of every clone at that second clone. The install records the clone's
+absolute path in `~/.claude/plugins/` and the git-ignored `.claude/settings.local.json`, and copies
+the whole working tree (untracked files included) into `~/.claude/plugins/cache/`, so do not keep
+secrets in the checkout when you install. Do not use `--scope project`: it rewrites the committed
+`.claude/settings.json` with an absolute path.
 
 Copy selected skills into the destination listed in the sourced compatibility table:
 
 ```bash
 mkdir -p ../consumer/.agents/skills
-cp -R skills/wiki-query skills/wiki-curate ../consumer/.agents/skills/
+cp -R .agents/skills/wiki-query .agents/skills/wiki-curate ../consumer/.agents/skills/
 ```
 
 Copy on a branch, do not overwrite an existing same-name skill blindly, and review the consumer
@@ -474,7 +503,7 @@ successfully while skipping publication when the version's tag, published GitHub
 matching PyPI artifacts already exist.
 
 1. Move `Unreleased` changelog entries into the new version section and bump the version in
-   `pyproject.toml` and `server.json`.
+   `pyproject.toml`, `server.json` and `.claude-plugin/plugin.json`.
 2. Run `uv lock` so the lockfile carries the new version, plus the skill validator and the test
    suite. Open a PR; merge only after the Python 3.11-3.13 CI matrix is green.
 3. Watch the `release` run. Verify the source commit, immutable tag and matching wheel/sdist

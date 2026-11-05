@@ -1,6 +1,6 @@
 # knowledge-gateway agent skills
 
-These skills are reusable, provider-neutral operating playbooks for knowledge-gateway and its MCP tools. The canonical source is `skills/<name>/SKILL.md`; `.agents/skills` and `.claude/skills` are discovery aliases. Other repositories copy selected directories into a supported project-level path. See [`docs/agent-skills.md`](../docs/agent-skills.md) for the dated, sourced compatibility table.
+These skills are reusable, provider-neutral operating playbooks for knowledge-gateway and its MCP tools. The canonical source is `.agents/skills/<name>/SKILL.md`, which Codex, Gemini CLI, GitHub Copilot and Cursor discover natively; Claude Code loads the same directory through the repository plugin in `.claude-plugin/`. Other repositories copy selected directories into a supported project-level path. See [`docs/agent-skills.md`](https://github.com/fszalaj/knowledge-gateway/blob/main/docs/agent-skills.md) for the dated, sourced compatibility table and the Claude Code plugin setup. The source distribution ships this pack under `skills/`; paths in `manifest.json` are relative to the pack directory, so they hold in both places.
 
 | Skill | Purpose |
 |---|---|
@@ -22,24 +22,25 @@ These skills are reusable, provider-neutral operating playbooks for knowledge-ga
 Preflight and copy the complete pack without trailing directory slashes so the command behaves consistently on macOS/BSD and Linux:
 
 ```bash
+skill_src=.agents/skills  # skills in an unpacked source distribution
 skill_dest=../consumer/.agents/skills
 mkdir -p "$skill_dest"
-for skill_dir in skills/*/; do
+for skill_dir in "$skill_src"/*/; do
   skill_name=$(basename "$skill_dir")
   if [ -e "$skill_dest/$skill_name" ] || [ -L "$skill_dest/$skill_name" ]; then
     echo "refusing to overwrite $skill_name" >&2
     exit 1
   fi
 done
-for skill_dir in skills/*/; do
+for skill_dir in "$skill_src"/*/; do
   cp -R "${skill_dir%/}" "$skill_dest/"
 done
 ```
 
-For a subset, name only the required directories:
+For a subset, name only the required directories (use `skills/` instead of `.agents/skills/` in a source distribution):
 
 ```bash
-cp -R skills/wiki-query skills/wiki-curate ../consumer/.agents/skills/
+cp -R .agents/skills/wiki-query .agents/skills/wiki-curate ../consumer/.agents/skills/
 ```
 
 Use the destination from the sourced compatibility table. Copy on a branch and review the consumer diff. The consumer owns subsequent updates and removal. Keep the whole folder when a skill contains `references/`, `scripts/`, or `assets/`; the source `manifest.json` is inventory, not a client discovery requirement.
