@@ -1,0 +1,14 @@
+{
+  "name": "knowledge-gateway",
+  "owner": {
+    "name": "Filip Szalaj"
+  },
+  "description": "Repository-local marketplace that serves this checkout's knowledge-gateway skill pack to Claude Code.",
+  "plugins": [
+    {
+      "name": "knowledge-gateway",
+      "source": "./",
+      "description": "The knowledge-gateway agent skills, read in place from .agents/skills."
+    }
+  ]
+}

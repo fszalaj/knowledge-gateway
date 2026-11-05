@@ -194,6 +194,9 @@ def archive_files(data, name):
             if str(path) in seen:
                 raise ReleaseError("Duplicate archive member")
             seen.add(str(path))
+            # Only sdists up to v0.12.0 (published with these symlinks) carry the aliases, and
+            # resuming an incomplete 0.12.0 release still needs this; the repository now tracks
+            # regular import files. Narrow or remove it after the next release.
             if member.issym() and len(path.parts) == 2 and path.name in {"CLAUDE.md", "GEMINI.md"}:
                 if member.linkname != "AGENTS.md":
                     raise ReleaseError("Unsafe documentation alias target")
