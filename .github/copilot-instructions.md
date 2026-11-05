@@ -2,6 +2,6 @@ Follow `AGENTS.md` as the repository-wide engineering contract.
 
 Use `gateway-setup` when configuring MCP capabilities. For substantial changes, follow the end-to-end loop in `docs/agent-skills.md`. Before broad code changes, use `code-graph-build`, `code-graph-explore`, and `code-impact`; before writing durable documentation, use `wiki-query`, `wiki-curate`, and `obsidian-markdown`.
 
-The canonical project skills live under `.agents/skills/`, which Copilot discovers natively; Claude Code reads the same pack through `.claude-plugin/plugin.json`. Copy selected directories into other client discovery paths; do not add symlinks or generated copies. Do not fork the skill text without updating the manifest and validator.
+The canonical project skills live under `.agents/skills/`, which Copilot discovers natively; Claude Code reads the same files as `AGENTS.md` instructs. Copy selected directories into other client discovery paths; do not add symlinks or generated copies. Do not fork the skill text without updating the manifest and validator.
 
 Do not weaken path containment, symlink protection, ACL enforcement, error masking, atomic writes, repository locks, or path-scoped Git commits. Add tests for behavior changes and keep optional dependencies lazily imported.

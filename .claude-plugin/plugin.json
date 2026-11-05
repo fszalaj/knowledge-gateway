@@ -1,9 +1,0 @@
-{
-  "name": "knowledge-gateway",
-  "description": "Provider-neutral knowledge-gateway agent skills: gateway setup and operations, code-graph build/explore/impact, Obsidian wiki query, curation, ingest, lint and fold, Canvas, Markdown and document conversion.",
-  "version": "0.13.0",
-  "author": {
-    "name": "Filip Szalaj"
-  },
-  "skills": ["./.agents/skills/"]
-}

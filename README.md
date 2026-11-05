@@ -80,11 +80,6 @@ then `./wiki`, then a single `*-obsidian-vault/` directory, then a single child 
 
 Use `knowledge-gateway[all]` in the snippet if you also want conversion.
 
-**Claude Code plugin.** This repository is also a Claude Code plugin that bundles the agent
-skills. From a clone, run `claude --plugin-dir .` and the skills appear as
-`/knowledge-gateway:<skill>`. See [docs/agent-skills.md](docs/agent-skills.md) for a persistent
-install and its caveats.
-
 ## Onboarding with an AI agent
 
 Paste this into your agent at the root of the repository that should get a vault. The agent first
@@ -166,8 +161,8 @@ Install profiles, every pass, the metadata the graph reports and its known limit
 The repository ships a pack of agent skills in `.agents/skills/`: setup and operations, building
 and exploring the code graph, impact analysis, curating and querying the wiki, Canvas and
 Obsidian authoring, and document conversion. Codex, Gemini CLI, GitHub Copilot and Cursor find
-that directory on their own; Claude Code loads it through the plugin described above. Skills add
-procedures, not privileges: access control stays in the server.
+that directory on their own; Claude Code reads a skill's `SKILL.md` when a task matches, as
+`AGENTS.md` instructs. Skills add procedures, not privileges: access control stays in the server.
 
 To use skills in another repository, copy the directories you need into that repository and
 review them there. [docs/agent-skills.md](docs/agent-skills.md) has the client compatibility
@@ -177,6 +172,36 @@ table, copy instructions and maintenance rules.
 
 For a team, run one always-on gateway over HTTP, with a bearer token per person and a per-vault
 access list.
+
+```mermaid
+flowchart LR
+    subgraph team [Team agents]
+        U1[Alice's agent]
+        U2[Bob's agent]
+    end
+    U1 -->|"HTTPS /mcp/ + bearer token"| T
+    U2 -->|"HTTPS /mcp/ + bearer token"| T
+    subgraph gw [Shared gateway]
+        T{"token in tokens.yaml?"}
+        A{"vault in the token's list?"}
+        W{"write tool with write: false?"}
+        P[path guards]
+        T -->|"yes: sub, vaults, write"| A
+        A -->|yes| W
+        W -->|no| P
+    end
+    T -->|no| E1[401]
+    A -->|no| E2[vault_forbidden]
+    W -->|yes| E3[write_forbidden]
+    P --> V[/Vault folder from vaults.yaml/]
+    V <-->|"lock + atomic write, author = sub"| G[(git)]
+```
+
+Every request carries the user's token. The gateway maps it to an identity (`sub`), the vaults
+that token may see and whether it may write; any other vault looks the same whether it exists or
+not. Allowed requests then pass the same path guards as local mode, and a commit names the
+requesting user as its author (the committer stays the service identity). Unexpected errors are
+masked, so OS and git details never reach a client.
 
 1. Copy `vaults.example.yaml` to `vaults.yaml` and map each vault name to its path. `repo_root`
    and `subdir` scope commits when a vault lives inside a larger repository.

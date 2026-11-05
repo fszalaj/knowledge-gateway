@@ -14,20 +14,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 # The canonical pack is a real directory that Codex, Gemini CLI, GitHub Copilot and Cursor
-# discover natively; Claude Code reaches it through the repository plugin manifest.
+# discover natively; Claude Code reads a skill file on demand, as AGENTS.md instructs.
 SKILLS_REL = Path(".agents") / "skills"
 SKILLS_ROOT = ROOT / SKILLS_REL
 MANIFEST = SKILLS_ROOT / "manifest.json"
-PLUGIN_NAME = "knowledge-gateway"
 # Regular files that import AGENTS.md. A git symlink checks out as a text placeholder on
 # Windows without Developer Mode (or any core.symlinks=false checkout), so agents would get
 # no instructions; an import line works everywhere.
 INSTRUCTION_FILES = ("CLAUDE.md", "GEMINI.md")
-RETIRED_PATHS = (Path("skills"), Path(".claude") / "skills")
-# The plugin root is the repository root, and Claude Code auto-loads these default component
-# paths from a plugin root: adding one would ship it silently to every plugin user.
-PLUGIN_DEFAULT_COMPONENTS = ("commands", "agents", "hooks/hooks.json", ".mcp.json", ".lsp.json",
-                             "bin", "settings.json", "output-styles")
+# Earlier layouts: the skills/ and .claude/skills/ aliases, and the Claude Code plugin manifests.
+RETIRED_PATHS = (Path("skills"), Path(".claude") / "skills", Path(".claude-plugin"))
 NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 KNOWN_TOOLS = {
     "list_vaults", "list_notes", "read_note", "list_attachments", "read_attachment",
@@ -121,16 +117,6 @@ def validate_retired_paths(root: Path, entries: dict[str, bytes] | None) -> list
     return errors
 
 
-def validate_plugin_root(root: Path, entries: dict[str, bytes] | None) -> list[str]:
-    errors = []
-    for rel in PLUGIN_DEFAULT_COMPONENTS:
-        tracked = entries is not None and any(p == rel or p.startswith(rel + "/") for p in entries)
-        if tracked or (entries is None and (root / rel).exists()):
-            errors.append(f"{rel}: Claude Code would load it from the repository plugin root for every "
-                          "plugin user; move it or give the plugin its own root")
-    return errors
-
-
 def _inside(root: Path, rel: str) -> Path | None:
     """Resolve a repository-relative reference, or None when it escapes the repository."""
     if Path(rel).is_absolute() or "\\" in rel:
@@ -173,79 +159,9 @@ def validate_instruction_files(root: Path) -> list[str]:
     return errors
 
 
-def _project_version(root: Path) -> str | None:
-    try:
-        import tomllib  # stdlib from Python 3.11, the project's minimum; imported lazily so an
-    except ImportError:  # older system Python gets this message rather than an import traceback
-        sys.exit("validate-skills.py needs Python 3.11+ (tomllib) to read the pyproject version")
-    try:
-        return tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
-    except (OSError, KeyError, tomllib.TOMLDecodeError):
-        return None
-
-
-def _load_json(path: Path, label: str, errors: list[str]) -> dict | None:
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        errors.append(f"missing {label}")
-        return None
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        errors.append(f"invalid {label} JSON: {exc}")
-        return None
-    if not isinstance(data, dict):
-        errors.append(f"{label} must be a JSON object")
-        return None
-    return data
-
-
-def validate_plugin(root: Path) -> list[str]:
-    """Claude Code scans only .claude/skills; the repository plugin serves it the canonical pack."""
-    errors: list[str] = []
-    plugin = _load_json(root / ".claude-plugin" / "plugin.json", ".claude-plugin/plugin.json", errors)
-    if plugin is not None:
-        name = plugin.get("name")
-        if name != PLUGIN_NAME:
-            errors.append(f"plugin.json name must be {PLUGIN_NAME!r}")
-        version = _project_version(root)
-        if version is None or plugin.get("version") != version:
-            errors.append(f"plugin.json version must equal pyproject version {version!r}")
-        skills = plugin.get("skills")
-        refs = [skills] if isinstance(skills, str) else skills
-        if not isinstance(refs, list) or not refs or any(not isinstance(ref, str) for ref in refs):
-            errors.append("plugin.json skills must name the canonical skill pack")
-        else:
-            for ref in refs:
-                target = _inside(root, ref)
-                if not ref.startswith("./"):  # Claude Code rejects plugin paths without it
-                    errors.append(f"plugin.json skills path {ref!r} must start with './'")
-                elif target is None:
-                    errors.append(f"plugin.json skills path {ref!r} escapes the repository")
-                elif not target.is_dir():
-                    errors.append(f"plugin.json skills path {ref!r} does not exist")
-                elif target != (root / SKILLS_REL).resolve():
-                    errors.append(f"plugin.json skills path {ref!r} must be ./{SKILLS_REL.as_posix()}/")
-    market = _load_json(root / ".claude-plugin" / "marketplace.json", ".claude-plugin/marketplace.json", errors)
-    if market is not None:
-        # The documented install command is knowledge-gateway@knowledge-gateway.
-        if market.get("name") != PLUGIN_NAME:
-            errors.append(f"marketplace.json name must be {PLUGIN_NAME!r}")
-        owner = market.get("owner")
-        if not isinstance(owner, dict) or not isinstance(owner.get("name"), str) or not owner["name"].strip():
-            errors.append("marketplace.json owner.name must be a non-empty string")
-        entries = market.get("plugins")
-        if not isinstance(entries, list) or not any(
-            isinstance(entry, dict) and entry.get("name") == PLUGIN_NAME and entry.get("source") == "./"
-            for entry in entries
-        ):
-            errors.append(f"marketplace.json must list plugin {PLUGIN_NAME!r} with source './'")
-    return errors
-
-
 def validate(root: Path = ROOT) -> list[str]:
     entries, reason = git_index(root)
     return (validate_tracked_symlinks(root, entries, reason) + validate_instruction_files(root)
-            + validate_plugin(root) + validate_plugin_root(root, entries)
             + validate_retired_paths(root, entries) + validate_pack(root))
 
 

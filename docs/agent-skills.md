@@ -12,32 +12,21 @@ The skills are reference assets for agents and consuming repositories; they are 
 
 The canonical files live under `.agents/skills/<name>/SKILL.md`, a real directory. The repository tracks no symlinks and no generated copies: a git symlink checks out as a short text placeholder on Windows without Developer Mode and in any `core.symlinks=false` checkout, which leaves agents with no instructions and no skills. Consumer repositories can copy the required directories into a documented project-level discovery path.
 
-Paths were verified against the linked official documentation on 2026-08-17; no minimum client version is asserted. The Claude Code plugin route was verified with Claude Code 2.1.318 on 2026-11-05. Re-check the source after a client upgrade.
+Paths were verified against the linked official documentation on 2026-08-17; no minimum client version is asserted. Re-check the source after a client upgrade.
 
 | Client | Project-level discovery path | How this repository serves it | Official source |
 |---|---|---|---|
 | Codex | `.agents/skills` | native | [OpenAI: Build skills](https://developers.openai.com/plugins/build/skills) |
 | Gemini CLI | `.agents/skills` or `.gemini/skills` | native | [Gemini CLI: Managing Agent Skills](https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/using-agent-skills.md) |
-| Claude Code | `.claude/skills` | plugin manifest `.claude-plugin/plugin.json` pointing at `.agents/skills` | [Claude Code: Extend Claude with skills](https://code.claude.com/docs/en/skills) |
+| Claude Code | `.claude/skills` | `CLAUDE.md` imports `AGENTS.md`, which has the agent read `.agents/skills/<name>/SKILL.md` | [Claude Code: Extend Claude with skills](https://code.claude.com/docs/en/skills) |
 | GitHub Copilot | `.agents/skills`, `.github/skills`, or `.claude/skills` | native | [GitHub Docs: About agent skills](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills) |
 | Cursor | `.agents/skills` or `.cursor/skills` | native | [Cursor Docs: Agent Skills](https://cursor.com/docs/skills#skill-directories) |
 
 Agent instructions use the same portable pattern. `AGENTS.md` is canonical and read natively by Codex and Copilot. `CLAUDE.md` is a regular file containing the import line `@AGENTS.md`, and `GEMINI.md` contains `@./AGENTS.md` (Gemini CLI resolves imports relative to the importing file).
 
-### Claude Code plugin
+### Claude Code
 
-Claude Code discovers project skills only in `.claude/skills`, so this repository is also a Claude Code plugin whose `skills` entry is `./.agents/skills/`, with a repository-local marketplace in `.claude-plugin/marketplace.json`. Nothing loads until you opt in; then skills appear namespaced as `/knowledge-gateway:<skill>`. Without the plugin, an agent reads `.agents/skills/<name>/SKILL.md` directly. From the repository root:
-
-```bash
-# Recommended: load the plugin in place for this session
-claude --plugin-dir .
-
-# Persistent, only when you keep exactly one clone per OS user
-claude plugin marketplace add ./ --scope local
-claude plugin install knowledge-gateway@knowledge-gateway --scope local
-```
-
-With `--plugin-dir` the plugin is read in place, so skill edits are live. The persistent install registers the marketplace per OS user, so running it in a second clone re-points every clone; it records the clone's absolute path in `~/.claude/plugins/` and the git-ignored `.claude/settings.local.json`, and copies the working tree, untracked files included, into `~/.claude/plugins/cache/`. Do not keep secrets in the checkout when you install: a gitignored `tokens.yaml`, `vaults.yaml` or `.env` is copied into that cache too. Do not commit a directory marketplace to `.claude/settings.json` (Claude Code cannot resolve a relative one) and do not use `marketplace add --scope project`, which writes an absolute path into that committed file. The plugin `version` tracks the package version in `pyproject.toml`; the test suite enforces that they match.
+Claude Code discovers project skills only in `.claude/skills`, and this repository keeps no copy there. Instead `CLAUDE.md` imports `AGENTS.md`, which lists the skills and tells the agent to read `.agents/skills/<name>/SKILL.md` when a task matches. Claude Code therefore follows the same files as every other client, with no plugin to install, no symlink and no generated copy; the skills are not offered as slash commands. A consumer repository that wants native discovery copies the directories it needs into its own `.claude/skills/` and owns those copies, as described below.
 
 ### Copying skills into another repository
 
@@ -66,7 +55,7 @@ cp -R .agents/skills/wiki-query .agents/skills/wiki-curate ../consumer/.agents/s
 
 Use the destination from the compatibility table. Copy on a branch and review the consumer diff before merge. Copies are consumer-owned and versioned; update or remove them through that repository's normal review workflow. This avoids a live dependency on the location of the knowledge-gateway checkout. `manifest.json` remains the source package inventory and is not required for client discovery; its paths are relative to the pack directory (`<name>/SKILL.md`), so they hold in the repository, in the sdist's `skills/` directory and in copies.
 
-After copying skills or installing the plugin, reload or restart the client and confirm that one skill is listed or directly invokable. If it is absent, verify the path against the current linked documentation before proceeding.
+After copying skills, reload or restart the client and confirm that one skill is listed or directly invokable. If it is absent, verify the path against the current linked documentation before proceeding.
 
 ## Included workflows
 
