@@ -36,6 +36,13 @@ For the full local skill pack, merge this project-level entry into `.mcp.json`:
 
 If auto-detection is ambiguous, replace `--local` with `--vault ./<vault-directory>`.
 
+On Windows with Smart App Control on, uv's own Python builds and its generated `knowledge-gateway.exe` launcher are
+blocked ("Smart App Control has blocked part of this app"). Install Python from python.org
+(`winget install --id Python.Python.3.13 -e`) and use
+`"--python-preference", "system", "--refresh", "--from", "knowledge-gateway[all]", "python", "-m", "gateway", "--local"`
+as the arguments; build graphs with `python -m gateway.codegraph.cli` instead of `knowledge-gateway-graph`. Never
+suggest turning Smart App Control off.
+
 ## Procedure
 
 1. Inspect the existing `.mcp.json`. Merge the `wiki` entry into `mcpServers`; never discard other servers.
