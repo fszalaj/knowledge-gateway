@@ -35,6 +35,12 @@ from the SDK's default glob: the nearest enclosing project owns a file, bin/ and
 EXTRACTED from explicit <Compile Include> when default items are switched off), includes and
 constrained_by (requirements file -> the file its -r / -c names).
 
+Galaxy -> role join: galaxy_provides() is this pass's rule for which Galaxy requirement provides
+which Ansible role (a role entry the role of the same name; a collection `ns.coll` each
+`ns.coll.<role>` reference). Only the Ansible pass knows which roles a playbook or task names, so
+it calls the rule and emits the `provides` edges (extpackage:galaxy:<name> -> role:<name>,
+INFERRED), typing a role that is referenced but not defined in the repository.
+
 Deliberately absent: anything that could carry a credential or a private location. Index URLs,
 --extra-index-url and other pip options, direct-reference URLs (`name @ https://...`), git/url
 sources in package.json, Poetry and Galaxy entries are reduced to the package NAME (the source
@@ -155,6 +161,12 @@ def _is_file(root_res: Path, rel: str) -> bool:
         return False
 
 
+def package_node(eco: str, key: str, label: str, rel: str) -> dict:
+    """The extpackage:<eco>:<key> node; the Ansible pass emits Galaxy packages in this shape too."""
+    return {"id": f"extpackage:{eco}:{key}", "label": label, "type": "package",
+            "file_type": eco, "source_file": rel, "ecosystem": eco}
+
+
 def _pypi(name: str) -> str:
     return re.sub(r"[-_.]+", "-", name).lower()
 
@@ -215,8 +227,7 @@ def extract(root: Path, exclude: frozenset[str] = frozenset(),
         edges.append(e)
 
     def package(eco: str, key: str, label: str, rel: str) -> str:
-        return add({"id": f"extpackage:{eco}:{key}", "label": label, "type": "package",
-                    "file_type": eco, "source_file": rel, "ecosystem": eco})
+        return add(package_node(eco, key, label, rel))
 
     manifests: list[tuple[Path, str, str]] = []
     cs_files: list[str] = []
@@ -540,20 +551,20 @@ def _galaxy_name(s: str) -> tuple[str | None, str | None]:
         if tail and _GALAXY_NAME.match(tail) and "@" not in tail else (None, None)
 
 
-def _galaxy(text, rel, me, add, edge, package):
-    data = yaml.safe_load(text)
+def galaxy_entries(data) -> list[tuple[str, str, str | None, str | None]] | None:
+    """[(kind collection|role, name, plain version or None, origin or None)] of one parsed
+    requirements.yml, at most MAX_DEPS; None when the document is some other tool's file."""
     if isinstance(data, list):
         sections = [("role", data)]
     elif isinstance(data, dict) and ({"collections", "roles"} & set(data)):
         sections = [("collection", data.get("collections")), ("role", data.get("roles"))]
     else:
-        return                        # some other tool's requirements.yml
-    mid = add(dict(me))
-    n = 0
+        return None
+    out: list[tuple[str, str, str | None, str | None]] = []
     for kind, entries in sections:
         for ent in entries if isinstance(entries, list) else []:
-            if n >= MAX_DEPS:
-                return
+            if len(out) >= MAX_DEPS:
+                return out
             ver = None
             if isinstance(ent, str):
                 name, source = _galaxy_name(ent)
@@ -570,6 +581,47 @@ def _galaxy(text, rel, me, add, edge, package):
                 continue
             if not name:
                 continue
-            edge(mid, package("galaxy", name, name, rel), "depends_on", kind=kind,
-                 version=ver if ver and _PLAIN_VERSION.fullmatch(ver) else None, origin=source)
-            n += 1
+            out.append((kind, name, ver if ver and _PLAIN_VERSION.fullmatch(ver) else None, source))
+    return out
+
+
+def _galaxy(text, rel, me, add, edge, package):
+    entries = galaxy_entries(yaml.safe_load(text))
+    if entries is None:
+        return                        # some other tool's requirements.yml
+    mid = add(dict(me))
+    for kind, name, ver, source in entries:
+        edge(mid, package("galaxy", name, name, rel), "depends_on", kind=kind,
+             version=ver, origin=source)
+
+
+_ROLE_SEGMENT = re.compile(r"\w+")
+
+
+def galaxy_provides(requirements, role_names) -> list[tuple[dict, str]]:
+    """Which Galaxy requirement provides which role: [(extpackage node, role name)].
+
+    `requirements` is [(rel, parsed document)] of requirements.yml files, `role_names` the names
+    behind role:<name> ids. A role entry provides the role of exactly its name (the `name:` it
+    is installed as, else the trailing name of its src); a collection `ns.coll` provides each
+    role referenced by its fully qualified name `ns.coll.<role>`. Names only, like the rest of
+    this pass; a document that is not a requirements file contributes nothing."""
+    names = {r for r in role_names if isinstance(r, str)}
+    by_coll: dict[str, list[str]] = {}
+    for r in sorted(names):
+        head, dot, tail = r.rpartition(".")
+        if dot and head.count(".") == 1 and _ROLE_SEGMENT.fullmatch(tail):
+            by_coll.setdefault(head, []).append(r)
+    out: list[tuple[dict, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for rel, data in requirements:
+        for kind, name, _, _ in galaxy_entries(data) or ():
+            if kind == "role":
+                targets = [name] if name in names else []
+            else:
+                targets = by_coll.get(name, [])
+            for t in targets:
+                if (name, t) not in seen:
+                    seen.add((name, t))
+                    out.append((package_node("galaxy", name, name, rel), t))
+    return out

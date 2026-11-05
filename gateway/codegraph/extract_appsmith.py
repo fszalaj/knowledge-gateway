@@ -23,7 +23,11 @@ Emitted nodes:
   `appsmith:<app>`                         the application
   `appsmithpage:<app>/<page>`              a page
   `appsmithquery:<app>/<page>/<query>`     a query/API - attrs: plugin, plugin_type, http_method,
-                                           path (URL path shape only, see below), on_page_load
+                                           path (URL path shape only, see below), route_shape
+                                           (the same shape with one leading `/` and no empty or
+                                           trailing segments - the form the HTTP request-file
+                                           pass emits, so routes join across passes),
+                                           on_page_load
   `appsmithdatasource:<app>/<name>`        a datasource - attrs: plugin only
   `appsmithwidget:<app>/<page>/<widget>`   a widget - attrs: widget_type
   `appsmithjs:<app>/<page>/<jsobject>`     a JS object
@@ -213,6 +217,9 @@ def _path_only(p) -> str | None:
         parts.append(p[pos:])
         p = "".join(parts)
     p = p.replace("{{", "").replace("}}", "")
+    # query and fragment first, before any host logic: a query may itself hold `/` or `://`
+    # (`?next=https://...`), and RFC 3986 allows neither `?` nor `#` unescaped in userinfo or host
+    p = p.split("?", 1)[0].split("#", 1)[0]
     if "://" in p:
         rest = p.split("://", 1)[1]
         p = "/" + rest.split("/", 1)[1] if "/" in rest else ""
@@ -224,8 +231,7 @@ def _path_only(p) -> str | None:
         head, sep, rest = p.partition("/")
         if any(c in head for c in "@:."):
             p = "/" + rest if sep else ""
-    for sep in ("?", "#", ";"):
-        p = p.split(sep, 1)[0]
+    p = p.split(";", 1)[0]                  # matrix parameters
     segs = []
     for seg in p.strip().split("/"):
         seg = seg.strip()
@@ -235,6 +241,15 @@ def _path_only(p) -> str | None:
             segs.append("{}")
     p = "/".join(segs).replace("\x00", "{}")
     return p[:_MAX_PATH_LEN] or None
+
+
+def route_shape(shape: str | None) -> str | None:
+    """A `_path_only` shape in the one form other passes join on: a single leading `/`, no
+    empty or trailing segments (`api//items/{}/` -> `/api/items/{}`), `/` for the root. It adds
+    nothing `_path_only` did not keep; None stays None."""
+    if shape is None:
+        return None
+    return "/" + "/".join(s for s in shape.split("/") if s)
 
 
 def _action(meta: dict) -> dict:
@@ -463,12 +478,13 @@ def extract(root: Path, exclude: frozenset[str] = frozenset(),
                 cfg = cfg if isinstance(cfg, dict) else {}
                 dsref = act.get("datasource") if isinstance(act.get("datasource"), dict) else {}
                 on_load = act.get("runBehaviour") == "ON_PAGE_LOAD" or act.get("executeOnLoad") is True
+                qpath = _path_only(cfg.get("path"))
                 qid = add(ids[name], label=name, type="appsmith_query", file_type="appsmith",
                           source_file=rel(files[0]),
                           plugin=_str(act.get("pluginId")) or _str(dsref.get("pluginId")),
                           plugin_type=_str(act.get("pluginType")) or _str(dsref.get("pluginType")),
                           http_method=_str(cfg.get("httpMethod")),
-                          path=_path_only(cfg.get("path")),
+                          path=qpath, route_shape=route_shape(qpath),
                           on_page_load=True if on_load else None)
                 if not qid:
                     continue

@@ -65,6 +65,37 @@ def _repo(root):
     _mk(root, "site.yml", "- hosts: web\n  tasks:\n    - name: ping\n      ping:\n")
     _mk(root, "inventory/hosts", "[web]\nweb1.example.com\n")
     _mk(root, "inventory/group_vars/web.yml", f"token: {CANARY}\n")
+    # ASP.NET Core API, its request file, its Beanstalk bundle and the Jenkins job deploying it
+    _mk(root, "api/Api.csproj",
+        '<Project Sdk="Microsoft.NET.Sdk.Web">\n  <PropertyGroup>\n'
+        f'    <TargetFramework>net8.0</TargetFramework>\n    <UserSecretsId>{CANARY}</UserSecretsId>\n'
+        '  </PropertyGroup>\n</Project>\n')
+    _mk(root, "api/Controllers/ItemsController.cs",
+        "using Microsoft.AspNetCore.Mvc;\n\n[ApiController]\n[Route(\"api/[controller]\")]\n"
+        "public class ItemsController : ControllerBase\n{\n"
+        f"    private const string Key = \"{CANARY}\";\n"
+        "    [HttpGet]\n    public IActionResult List() => Ok();\n\n"
+        "    [HttpGet(\"{id:int}\")]\n    public IActionResult Get(int id) => Ok();\n}\n")
+    _mk(root, "api/api.http",
+        f"@host = http://user:{CANARY}@localhost:5000\n@token = {CANARY}\n\n"
+        "### list\nGET {{host}}/api/items\n"
+        "Authorization: Bearer {{token}}\n\n"
+        "### one\n# @name one\n"
+        f"GET {{{{host}}}}/api/items/{{{{id}}}}?q={CANARY}\nX-Api-Key: {CANARY}\n\n"
+        f"{{\"secret\": \"{CANARY}\"}}\n")
+    _mk(root, "api/.ebextensions/01-app.config",
+        f"option_settings:\n  aws:elasticbeanstalk:application:environment:\n"
+        f"    DB_PASSWORD: {CANARY}\n")
+    _mk(root, "api/aws-beanstalk-tools-defaults.json",
+        json.dumps({"profile": CANARY, "region": "eu-west-1", "application": "shop",
+                    "environment": "shop-prod", "project-location": "."}))
+    _mk(root, "Jenkinsfile",
+        "pipeline {\n  agent any\n"
+        f"  environment {{\n    TOKEN = '{CANARY}'\n    KEY = credentials('deploy-key')\n  }}\n"
+        "  stages {\n"
+        "    stage('Image') { steps { sh 'docker build -t app .' } }\n"
+        "    stage('Deploy') { steps { dir('api') { sh 'dotnet eb deploy-environment' } } }\n"
+        "  }\n}\n")
 
 
 def _index(data):
@@ -79,9 +110,67 @@ def test_every_repo_pass_runs_and_is_reported(tmp_path):
     data = build_graph(tmp_path)
     passes = data["graph"]["passes"]
     assert list(passes) == [name for name, _ in REPO_PASSES]
-    for name in ("ansible", "bicep", "docker", "ghactions", "k8s", "manifests"):
+    for name in ("ansible", "bicep", "docker", "ghactions", "k8s", "manifests",
+                 "jenkins", "beanstalk", "http", "aspnet"):
         assert passes[name] > 0, name
     assert passes["fabric"] == 0 and passes["appsmith"] == 0   # ran, found nothing
+    assert data["graph"]["links"] == {"calls_api": 2}
+
+
+def test_runtime_passes_join_on_shared_ids(tmp_path):
+    _repo(tmp_path)
+    nodes, edges = _index(build_graph(tmp_path))
+    env = "beanstalkenv:shop/shop-prod"
+    # Jenkins deploys the environment the Beanstalk defaults file targets: one node, typed
+    assert ("jenkinsstage:Jenkinsfile#Deploy", "deploys", env) in edges
+    assert ("awsdeploydefaults:api/aws-beanstalk-tools-defaults.json", "targets", env) in edges
+    assert (nodes[env]["type"], nodes[env]["file_type"]) == ("beanstalk_environment", "beanstalk")
+    # ... builds the project the manifests pass parsed and the aspnet pass serves from
+    assert ("jenkinsstage:Jenkinsfile#Deploy", "builds", "project:api/Api.csproj") in edges
+    assert ("aspnetapp:api", "defined_by", "project:api/Api.csproj") in edges
+    assert ("jenkinsstage:Jenkinsfile#Image", "builds", "dockerfile:Dockerfile") in edges
+    assert nodes["module:api/Controllers/ItemsController.cs"]["type"] == "module"
+    untyped = [i for i, n in nodes.items() if "type" not in n]
+    assert not [i for i in untyped if i.split(":", 1)[0] in
+                {"module", "project", "dockerfile", "beanstalkenv", "endpoint", "httprequest"}]
+
+
+def test_http_requests_call_the_endpoints_they_match(tmp_path):
+    # post-merge link: neither pass sees the other's nodes; build_graph joins them once
+    _repo(tmp_path)
+    data = build_graph(tmp_path)
+    calls = sorted((e["source"], e["target"], e["confidence"], e["match"])
+                   for e in data["links"] if e["relation"] == "calls_api")
+    assert calls == [
+        ("httprequest:api/api.http#1", "endpoint:GET /api/Items", "INFERRED", "exact"),
+        ("httprequest:api/api.http#one", "endpoint:GET /api/Items/{}", "INFERRED", "exact"),
+    ]
+
+
+def test_a_failing_link_costs_its_edges_not_the_build(tmp_path, monkeypatch):
+    from gateway.codegraph import build
+
+    def boom(nodes):
+        raise RuntimeError("unforeseen node shape")
+    monkeypatch.setattr(build, "POST_MERGE_LINKS", (("calls_api", boom),))
+    _repo(tmp_path)
+    data = build_graph(tmp_path)
+    assert data["graph"]["links"] == {"calls_api": -1}
+    assert data["graph"]["passes"]["aspnet"] > 0
+    assert not any(e["relation"] == "calls_api" for e in data["links"])
+
+
+def test_a_link_never_adds_nodes(tmp_path, monkeypatch):
+    from gateway.codegraph import build
+
+    def stray(nodes):
+        return [{"source": "httprequest:api/api.http#1", "target": "endpoint:GET /nowhere",
+                 "relation": "calls_api", "confidence": "EXTRACTED"}]
+    monkeypatch.setattr(build, "POST_MERGE_LINKS", (("calls_api", stray),))
+    _repo(tmp_path)
+    data = build_graph(tmp_path)
+    assert "endpoint:GET /nowhere" not in {n["id"] for n in data["nodes"]}
+    assert data["graph"]["links"] == {"calls_api": 0}
 
 
 def test_passes_join_on_each_others_ids(tmp_path):
@@ -122,6 +211,22 @@ def test_two_relations_on_one_pair_are_both_kept(tmp_path):
     assert not any("relations" in e for e in data["links"] if e["relation"] == "has_stage")
 
 
+def test_source_file_and_location_merge_as_one_unit():
+    # a node two passes emit takes the later source_file; a line number from the earlier file
+    # must not stay behind, pointing into the wrong file
+    import networkx as nx
+    from gateway.codegraph.build import _merge_node
+    G = nx.DiGraph()
+    _merge_node(G, {"id": "x", "type": "t", "source_file": "ci/a.txt", "source_location": "L8"})
+    _merge_node(G, {"id": "x", "source_file": "svc/b.json", "label": "x", "application": None})
+    assert G.nodes["x"] == {"type": "t", "source_file": "svc/b.json", "label": "x"}
+    _merge_node(G, {"id": "x", "source_file": "svc/b.json", "source_location": "L2"})
+    _merge_node(G, {"id": "x", "source_file": "svc/b.json", "kind": "k"})   # same file: kept
+    assert G.nodes["x"]["source_location"] == "L2"
+    _merge_node(G, {"id": "x", "source_file": "c.cs", "source_location": "L5"})
+    assert (G.nodes["x"]["source_file"], G.nodes["x"]["source_location"]) == ("c.cs", "L5")
+
+
 def test_repo_passes_need_no_tree_sitter(tmp_path, monkeypatch):
     # [graph-slim]: the parser pack is absent, every dedicated pass still runs and the script
     # and Dockerfile nodes they reference still carry a type
@@ -134,6 +239,12 @@ def test_repo_passes_need_no_tree_sitter(tmp_path, monkeypatch):
     nodes, _ = _index(data)
     assert nodes["module:infra/deploy.sh"]["type"] == "module"
     assert nodes["dockerfile:Dockerfile"]["type"] == "dockerfile"
+    # the runtime passes and the post-merge link need no parser pack either
+    for name in ("jenkins", "beanstalk", "http", "aspnet"):
+        assert data["graph"]["passes"][name] > 0, name
+    assert data["graph"]["links"] == {"calls_api": 2}
+    cs = nodes["module:api/Controllers/ItemsController.cs"]
+    assert (cs["type"], cs["file_type"]) == ("module", "csharp")
 
 
 @pytest.mark.parametrize("slim", ["no_tree_sitter", "python_only"])
