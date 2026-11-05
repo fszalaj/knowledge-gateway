@@ -4,37 +4,56 @@ knowledge-gateway ships reusable skills that turn individual MCP calls into repe
 
 ## Why skills live in this repository
 
-The gateway defines the trusted tool surface. Keeping the operating playbooks beside the implementation prevents drift between documented tool names, security boundaries and agent behavior. Every skill is registered in `skills/manifest.json` and validated in the test suite.
+The gateway defines the trusted tool surface. Keeping the operating playbooks beside the implementation prevents drift between documented tool names, security boundaries and agent behavior. Every skill is registered in `.agents/skills/manifest.json` and validated in the test suite.
 
 The skills are reference assets for agents and consuming repositories; they are not imported into the Python package at runtime and do not add privileges.
 
 ## Discovery and portability
 
-The canonical files live under `skills/<name>/SKILL.md`. This repository exposes both `.agents/skills` and `.claude/skills` as relative symlinks to that directory. Consumer repositories can copy the required directories into a documented project-level discovery path.
+The canonical files live under `.agents/skills/<name>/SKILL.md`, a real directory. The repository tracks no symlinks and no generated copies: a git symlink checks out as a short text placeholder on Windows without Developer Mode and in any `core.symlinks=false` checkout, which leaves agents with no instructions and no skills. Consumer repositories can copy the required directories into a documented project-level discovery path.
 
-Paths were verified against the linked official documentation on 2026-08-17; no minimum client version is asserted. Re-check the source after a client upgrade.
+Paths were verified against the linked official documentation on 2026-08-17; no minimum client version is asserted. The Claude Code plugin route was verified with Claude Code 2.1.318 on 2026-11-05. Re-check the source after a client upgrade.
 
-| Client | Project-level discovery path | Official source |
-|---|---|---|
-| Codex | `.agents/skills` | [OpenAI — Build skills](https://developers.openai.com/plugins/build/skills) |
-| Gemini CLI | `.agents/skills` or `.gemini/skills` | [Gemini CLI — Managing Agent Skills](https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/using-agent-skills.md) |
-| Claude Code | `.claude/skills` | [Claude Code — Extend Claude with skills](https://code.claude.com/docs/en/skills) |
-| GitHub Copilot | `.agents/skills`, `.github/skills`, or `.claude/skills` | [GitHub Docs — About agent skills](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills) |
-| Cursor | `.agents/skills` or `.cursor/skills` | [Cursor Docs — Agent Skills](https://cursor.com/docs/skills#skill-directories) |
+| Client | Project-level discovery path | How this repository serves it | Official source |
+|---|---|---|---|
+| Codex | `.agents/skills` | native | [OpenAI — Build skills](https://developers.openai.com/plugins/build/skills) |
+| Gemini CLI | `.agents/skills` or `.gemini/skills` | native | [Gemini CLI — Managing Agent Skills](https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/using-agent-skills.md) |
+| Claude Code | `.claude/skills` | plugin manifest `.claude-plugin/plugin.json` pointing at `.agents/skills` | [Claude Code — Extend Claude with skills](https://code.claude.com/docs/en/skills) |
+| GitHub Copilot | `.agents/skills`, `.github/skills`, or `.claude/skills` | native | [GitHub Docs — About agent skills](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills) |
+| Cursor | `.agents/skills` or `.cursor/skills` | native | [Cursor Docs — Agent Skills](https://cursor.com/docs/skills#skill-directories) |
+
+Agent instructions use the same portable pattern. `AGENTS.md` is canonical and read natively by Codex and Copilot. `CLAUDE.md` is a regular file containing the import line `@AGENTS.md`, and `GEMINI.md` contains `@./AGENTS.md` (Gemini CLI resolves imports relative to the importing file).
+
+### Claude Code plugin
+
+Claude Code discovers project skills only in `.claude/skills`, so this repository is also a Claude Code plugin whose `skills` entry is `./.agents/skills/`, with a repository-local marketplace in `.claude-plugin/marketplace.json`. Nothing loads until you opt in; then skills appear namespaced as `/knowledge-gateway:<skill>`. Without the plugin, an agent reads `.agents/skills/<name>/SKILL.md` directly. From the repository root:
+
+```bash
+# Recommended: load the plugin in place for this session
+claude --plugin-dir .
+
+# Persistent, only when you keep exactly one clone per OS user
+claude plugin marketplace add ./ --scope local
+claude plugin install knowledge-gateway@knowledge-gateway --scope local
+```
+
+With `--plugin-dir` the plugin is read in place, so skill edits are live. The persistent install registers the marketplace per OS user, so running it in a second clone re-points every clone; it records the clone's absolute path in `~/.claude/plugins/` and the git-ignored `.claude/settings.local.json`, and copies the working tree, untracked files included, into `~/.claude/plugins/cache/`. Do not commit a directory marketplace to `.claude/settings.json` (Claude Code cannot resolve a relative one) and do not use `marketplace add --scope project`, which writes an absolute path into that committed file. The plugin `version` tracks the package version in `pyproject.toml`; the test suite enforces that they match.
+
+### Copying skills into another repository
 
 Before copying the full pack, preflight every target and then copy each directory without a trailing slash so BSD/macOS and GNU `cp` preserve the skill directory:
 
 ```bash
 skill_dest=../consumer/.agents/skills
 mkdir -p "$skill_dest"
-for skill_dir in skills/*/; do
+for skill_dir in .agents/skills/*/; do
   skill_name=$(basename "$skill_dir")
   if [ -e "$skill_dest/$skill_name" ] || [ -L "$skill_dest/$skill_name" ]; then
     echo "refusing to overwrite $skill_name" >&2
     exit 1
   fi
 done
-for skill_dir in skills/*/; do
+for skill_dir in .agents/skills/*/; do
   cp -R "${skill_dir%/}" "$skill_dest/"
 done
 ```
@@ -42,14 +61,12 @@ done
 For a subset, name only the required directories:
 
 ```bash
-cp -R skills/wiki-query skills/wiki-curate ../consumer/.agents/skills/
+cp -R .agents/skills/wiki-query .agents/skills/wiki-curate ../consumer/.agents/skills/
 ```
 
-Use the destination from the compatibility table. Copy on a branch and review the consumer diff before merge. Copies are consumer-owned and versioned; update or remove them through that repository's normal review workflow. This avoids a live dependency on the location of the knowledge-gateway checkout. `manifest.json` remains the source package inventory and is not required for client discovery.
+Use the destination from the compatibility table. Copy on a branch and review the consumer diff before merge. Copies are consumer-owned and versioned; update or remove them through that repository's normal review workflow. This avoids a live dependency on the location of the knowledge-gateway checkout. `manifest.json` remains the source package inventory and is not required for client discovery; its paths are relative to the pack directory (`<name>/SKILL.md`), so they hold in the repository, in the sdist's `skills/` directory and in copies.
 
-After copying or changing an alias, reload or restart the client and confirm that one copied skill is listed or directly invokable. If it is absent, verify the path against the current linked documentation before proceeding.
-
-If a checkout cannot materialize Git symlinks, copy the skill directories into the native client path instead of treating the alias placeholder as a usable pack.
+After copying skills or installing the plugin, reload or restart the client and confirm that one skill is listed or directly invokable. If it is absent, verify the path against the current linked documentation before proceeding.
 
 ## Included workflows
 
@@ -149,7 +166,7 @@ When adding or changing a skill:
 3. Make frontmatter `name` equal the directory name.
 4. List every required gateway tool in `manifest.json`.
 5. Use only tool names in the validator allowlist, which mirrors the public tool surface.
-6. Update `skills/README.md`, the root `README.md` and `CHANGELOG.md` when the public inventory changes.
+6. Update `.agents/skills/README.md`, the root `README.md` and `CHANGELOG.md` when the public inventory changes.
 7. Run:
 
 ```bash
