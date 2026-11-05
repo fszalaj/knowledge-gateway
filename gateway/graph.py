@@ -109,9 +109,14 @@ def neighbors(vault_path: Path, name: str, node_id: str, depth: int = 1,
             if direction in ("in", "both"):
                 pairs += [(p, n) for p in G.predecessors(n)]
             for u, v in pairs:
-                edges.setdefault((u, v), {"source": u, "target": v,
-                                          "relation": G.edges[u, v].get("relation"),
-                                          "confidence": G.edges[u, v].get("confidence")})
+                if (u, v) not in edges:
+                    d = G.edges[u, v]
+                    view = {"source": u, "target": v, "relation": d.get("relation"),
+                            "confidence": d.get("confidence")}
+                    # one edge per pair: a pair related in several ways lists them all here
+                    if d.get("relations"):
+                        view["relations"] = list(d["relations"])
+                    edges[(u, v)] = view
                 other = v if u == n else u
                 if other not in seen:
                     seen.add(other)
