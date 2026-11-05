@@ -27,10 +27,12 @@ def test_agent_skill_package_is_valid():
     assert validator.validate() == []
 
 
-def test_expected_agent_skills_are_present():
+def test_bundled_agent_skills_are_present():
+    # A superset is allowed: a downstream repository that keeps this tree (a team vault, a fork) adds its own
+    # skills to the same pack; the validator holds every registered skill to the same rules.
     root = ROOT / ".agents" / "skills"
     names = {p.parent.name for p in root.glob("*/SKILL.md")}
-    assert names == {
+    assert names >= {
         "canvas",
         "code-graph-build",
         "code-graph-explore",
@@ -120,6 +122,38 @@ def _portable_fixture(tmp_path):
 
 def test_validator_accepts_the_portable_layout(tmp_path):
     assert _validator_module().validate(_portable_fixture(tmp_path)) == []
+
+
+def _add_downstream_skill(root, register=True, body="# Team runbook\n\nUse `read_note` to load the runbook page.\n"):
+    skill = root / ".agents" / "skills" / "team-runbook"
+    skill.mkdir()
+    (skill / "SKILL.md").write_text(
+        "---\nname: team-runbook\ndescription: Follow a team-specific runbook kept in the vault when operating a service.\n"
+        "---\n\n" + body, encoding="utf-8")
+    if register:
+        manifest_path = root / ".agents" / "skills" / "manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["skills"].append({"name": "team-runbook", "path": "team-runbook/SKILL.md", "mode": "read-only",
+                                   "requires": ["read_note"], "optional_requires": []})
+        manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+
+
+def test_validator_accepts_a_registered_downstream_skill(tmp_path):
+    root = _portable_fixture(tmp_path)
+    _add_downstream_skill(root)
+    assert _validator_module().validate(root) == []
+
+
+def test_validator_holds_a_downstream_skill_to_the_same_rules(tmp_path):
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    unregistered = _portable_fixture(tmp_path / "a")
+    _add_downstream_skill(unregistered, register=False)
+    assert "unregistered skill: .agents/skills/team-runbook/SKILL.md" in _validator_module().validate(unregistered)
+    undocumented = _portable_fixture(tmp_path / "b")
+    _add_downstream_skill(undocumented, body="# Team runbook\n\nNo tool is named here.\n")
+    errors = _validator_module().validate(undocumented)
+    assert any("declared tool `read_note` is not documented" in e for e in errors)
 
 
 @pytest.mark.parametrize("content", [
