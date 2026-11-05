@@ -26,6 +26,33 @@ Persistent installations update through their configured updater or an explicit 
   `targets` edges show which hosts a play runs against.
 - Graph metadata gains `passes`: each dedicated pass that ran and how many nodes it emitted,
   so `graph_stats` shows whether a pass found nothing or was never reached.
+- **CI, runtime and API passes.** Four more dedicated passes, also stdlib + PyYAML: Jenkins
+  pipelines (declarative and scripted stages and their order, credential ids, and what steps
+  run, build, push and deploy - Docker images, Helm releases, Elastic Beanstalk environments,
+  .NET projects), AWS Elastic Beanstalk bundles (`.ebextensions` option and resource names,
+  EB CLI and `aws-*-tools-defaults` targets, platform hooks, Procfile, Dockerrun), HTTP request
+  files (`*.http` / `*.rest`: each request's method, route shape, header and variable names, and
+  the files and requests it uses), and ASP.NET Core endpoints (attribute-routed controllers and
+  minimal APIs as `endpoint:<METHOD> <route shape>`, with the handler file and the project that
+  serves it). Their ids for files, projects, images, releases and environments are the owning
+  pass's, so a Jenkins stage, the project it deploys and the Beanstalk environment it targets
+  are one path.
+- **Post-merge links**, reported as `links` in the graph metadata and the `graph_build` reply:
+  joins that need every fragment run once after the merge. The first, `calls_api` (`INFERRED`,
+  with a `match` tier), links an Appsmith query or an HTTP request to the ASP.NET endpoint whose
+  method and route shape it matches. A link that raises is reported as `-1` and costs only its
+  edges.
+- Jenkins `dotnet test` steps link the stage to the project they test (`tests`), and an
+  environment a Jenkins deploy names hangs off its `beanstalkapp:` node even when no Beanstalk
+  file names it; both passes apply one set of application and environment name rules, so one
+  deployment has one id. ASP.NET endpoints carry `optional_segments`, and `calls_api` also
+  matches a client that leaves an optional trailing parameter out. When two passes emit the
+  same node, its `source_file` and `source_location` now always come from the same pass.
+- Appsmith query nodes carry `route_shape`, their path shape in the canonical form the HTTP and
+  ASP.NET passes use, so the three meet on one string. `path` is unchanged.
+- A Galaxy requirement `provides` (`INFERRED`) the role a playbook references by its name, or
+  `ns.coll.<role>` for a collection, so an installed role is typed instead of dangling.
+  `graph_build` replies with `passes` too.
 
 ### Security
 - Every new pass copies names, never values: no environment or build-arg values, parameter
@@ -34,6 +61,22 @@ Persistent installations update through their configured updater or an explicit 
   must not appear anywhere in its output. An Appsmith query keeps only the shape of its URL
   path: a segment that is not a plain word becomes `{}`, so a token carried in the path never
   reaches the graph.
+- The Jenkins, Elastic Beanstalk, HTTP and ASP.NET passes follow the same rule, each with its
+  own planted-value test: no Jenkins environment, parameter or option value, credential secret
+  or shell text; no `option_settings` value, command text or defaults-file value beyond the
+  application, environment, solution stack, project path and a plain region code; no request-file variable, header or body value, host,
+  userinfo or query string; no route constant, policy name or `appsettings` value. URL paths
+  keep only the shared shape (plain word segments or `v<n>`, everything else `{}`); the query
+  string and fragment are cut before any host logic, so nothing they hold (an embedded URL, a
+  `/`) can turn into a path segment, and a request-file base variable contributes only one `{}`
+  per segment of its path, never its text. A value-taking `helm` or `podman push` flag the
+  Jenkins, Kubernetes and Docker passes did not know (`--kube-tls-server-name`, `--keyring`,
+  `--tls-verify`, `--sign-passphrase-file`...) is no longer read as a release or image name.
+- Hostile runtime-pass input stays linear: every Jenkins bracket search and filesystem lookup is
+  charged to the file's work budget (lookups are also capped per file, as in the HTTP pass), a
+  Beanstalk option map repeated through YAML aliases is read once, and an ASP.NET `MapGroup`
+  prefix never grows past the route limit or nests past 32 groups - a chain of reassigned
+  groups used to take memory quadratic in its length.
 - A hostile or broken file costs that file, never the build or the server: the Ansible pass
   parses YAML with the pure-Python loader (libyaml crashed the process on deep nesting),
   recursive YAML aliases and deeply nested JSON are skipped, alias-amplified work and output are

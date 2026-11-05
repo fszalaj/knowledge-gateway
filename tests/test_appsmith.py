@@ -201,6 +201,19 @@ def test_no_values_leak(tmp_path):
         assert value not in blob
 
 
+@pytest.mark.parametrize("path, shape", [
+    # the query string and fragment are cut before any host logic, whatever they hold
+    ("/api/login?next=https://example.invalid/qsvaluealpha", "/api/login"),
+    ("/api/items#frag=https://example.invalid/fragvaluebeta", "/api/items"),
+    ("{{base}}?redirect=/qsvaluegamma/x", "{}"),
+    ("example.invalid?k=v/qsvalueepsilon", None),
+    ("https://example.invalid?sig=ab/qsvaluezeta", None),
+    ("user:pw@example.invalid/v1/items?x=/qsvalueeta", "/v1/items"),
+])
+def test_query_values_never_become_path_segments(path, shape):
+    assert extract_appsmith._path_only(path) == shape
+
+
 def test_app_in_subdirectory_and_detection(tmp_path):
     _app(tmp_path, "apps/shop")
     # look-alikes: no marker, or no pages/ directory

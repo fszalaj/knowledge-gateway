@@ -14,20 +14,25 @@ Repo-level pass over one pruned, sorted walk of the tree. It reads:
   YAML inventories                        a mapping of groups to {hosts:, children:, vars:}
   group_vars/<group>(.yml|.yaml|.json|/)  which group / host a vars file or directory configures
   host_vars/<host>(...)
+  requirements.yml / requirements.yaml    Ansible Galaxy requirements: only the collection and
+                                          role names, through extract_manifests' own parser
 
 Emitted node-id prefixes: `playbook:<rel>`, `role:<name>`, `tasksfile:<rel>`,
 `task:<rel>:<pos>:<name>` (in a playbook `<pos>` starts with `<play>.<section>.`, since every
 play and section restarts at 0), `handler:<name>`, `filter:<name>`, `pyfunc:<rel>:<fn>`,
 `template:<rel>`, `file:<rel>`, `invgroup:<name>`, `invhost:<name>`, `vars:<rel>`; a copied or
 templated source that another pass graphs (.py, or a tree-sitter extension) is pointed at
-by that pass's `module:<rel>` id instead, so the graphs join.
+by that pass's `module:<rel>` id instead, so the graphs join. A Galaxy requirement that provides a
+role is the manifests pass's `extpackage:galaxy:<name>` node, emitted in that pass's shape.
 
 Emitted relations: uses_role, role_depends_on, include_role, include_tasks, notifies,
 has_tasks, has_task, calls_filter, implemented_by, imports_playbook (playbook -> playbook),
 renders_template (task -> template), copies_file (task -> file), member_of (host -> group),
 child_of (group -> parent group, from `:children` / YAML `children:`), configures
 (vars -> group/host) and targets (playbook -> group/host named by a play's `hosts:`; INFERRED
-when the name is in no inventory of this repo).
+when the name is in no inventory of this repo), provides (extpackage:galaxy:<name> -> role,
+INFERRED: a Galaxy role entry of the same name, or the collection `ns.coll` of an `ns.coll.<role>`
+reference; a role the repository only references becomes a typed role with origin `galaxy`).
 
 Deliberately absent: every VALUE. No variable names or values from group_vars/host_vars,
 `[x:vars]` sections, inline INI host variables, play/task `vars:`, `copy: content:`, module
@@ -63,6 +68,7 @@ _ROLE_SUBDIRS = frozenset({"tasks", "handlers", "defaults", "vars", "meta", "tem
 _NOT_PLAYBOOK_DIRS = _ROLE_SUBDIRS | {"group_vars", "host_vars", ".github"}
 _YAML_EXT = (".yml", ".yaml")
 _INI_NAMES = {"hosts", "inventory"}
+_GALAXY_REQUIREMENTS = {"requirements.yml", "requirements.yaml"}
 MAX_BYTES = 2 * 1024 * 1024        # per-file read cap
 MAX_TASKS_PER_FILE = 2000          # per-file task-node cap
 MAX_TASK_VISITS = 20_000           # per-file tasks walked (nodes or not), aliases included
@@ -365,10 +371,13 @@ def extract(root: Path, exclude: frozenset[str] = frozenset(),
                     edge(hid, group(grp, rel), "member_of")
 
     playbooks: list[tuple[Path, list]] = []
+    galaxy_reqs: list[tuple[str, object]] = []
     for yf in yaml_files:
         data = _safe_load(yf, root_r)
         if _is_playbook(data):
             playbooks.append((yf, data))
+        elif yf.name.lower() in _GALAXY_REQUIREMENTS:
+            galaxy_reqs.append((yf.relative_to(root).as_posix(), data))
         elif _is_yaml_inventory(data):
             rel = yf.relative_to(root).as_posix()
             budget = [MAX_INVENTORY_ENTRIES]
@@ -632,6 +641,24 @@ def extract(root: Path, exclude: frozenset[str] = frozenset(),
                 # are part of the id: `task:<rel>:<play>.<section>.<i>:<name>`.
                 walk_tasks(play.get(sec) or [], pid, rel, ("play", pb.parent),
                            prefix=f"{pi}.{sec}.", budget=budget)
+
+    # --- Galaxy requirements: a role installed by `ansible-galaxy` is referenced here but
+    # defined nowhere in the tree, so without this join it stays an untyped placeholder. Which
+    # requirement provides which role is the manifests pass's rule; the roles are known here.
+    if galaxy_reqs:
+        try:
+            from .extract_manifests import galaxy_provides   # lazy: that module imports this one
+            provided = galaxy_provides(galaxy_reqs, [n[len("role:"):] for n in nodes
+                                                     if n.startswith("role:")])
+        except Exception:  # a requirements shape nobody foresaw costs the join, not the pass
+            provided = []
+        for pkg, rn in provided:
+            rid = f"role:{rn}"
+            define(pkg["id"], **{k: v for k, v in pkg.items() if k != "id"})
+            if not nodes.get(rid, {}).get("type"):
+                node(rid, label=rn, type="role", file_type="ansible",
+                     source_file=pkg["source_file"], origin="galaxy")
+            edge(pkg["id"], rid, "provides", confidence="INFERRED")
 
     return {"nodes": list(nodes.values()), "edges": edges}
 
