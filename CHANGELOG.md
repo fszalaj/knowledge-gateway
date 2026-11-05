@@ -7,6 +7,33 @@ Persistent installations update through their configured updater or an explicit 
 
 ## Unreleased
 
+### Breaking
+- **The skill pack moved from `skills/<name>` to `.agents/skills/<name>` in the repository.**
+  Update scripts, docs and links that copy from or point at `skills/...` in a clone or on GitHub
+  (for example `cp -R knowledge-gateway/skills/wiki-query ...` or `tree/main/skills/...` URLs)
+  to `.agents/skills/...`. Existing consumer copies are unaffected, and the sdist still ships
+  the pack under `skills/`. Paths in `manifest.json` are now relative to the pack
+  (`<name>/SKILL.md` instead of `skills/<name>/SKILL.md`), so they resolve in the repository,
+  in the sdist and in copies alike.
+
+### Changed
+- **Agent instructions and skills no longer depend on git symlinks.** On Windows without
+  Developer Mode, and in any `core.symlinks=false` checkout, the four tracked symlinks checked
+  out as 9-byte text files, so agents got no instructions and no skills. `CLAUDE.md` is now a
+  regular file importing `@AGENTS.md`, and `GEMINI.md` imports `@./AGENTS.md`. The canonical skill
+  pack is the real directory `.agents/skills/`, which Codex, Gemini CLI, GitHub Copilot and
+  Cursor discover natively. The `.claude/skills` alias is gone: Claude Code loads the pack once
+  you opt in to the repository plugin in `.claude-plugin/` (`claude --plugin-dir .` for one
+  session, or `claude plugin marketplace add ./ --scope local` plus
+  `claude plugin install knowledge-gateway@knowledge-gateway --scope local`, which write only
+  the git-ignored `.claude/settings.local.json`); skills appear as `/knowledge-gateway:<skill>`.
+  The validator and tests now reject any tracked symlink, retired-layout entries, import lines
+  hidden in code fences, plugin manifests Claude Code would refuse, and plugin default
+  components at the repository root, and require the plugin version to match the package.
+  An unreadable git index fails the no-symlink check in CI and prints a warning locally.
+  Releases now bump `.claude-plugin/plugin.json` together with `pyproject.toml` and
+  `server.json`.
+
 ### Documentation
 - Focus setup documentation on Gateway interfaces, per-user authentication, and vault ACLs.
 

@@ -8,12 +8,26 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILLS_ROOT = ROOT / "skills"
+# The canonical pack is a real directory that Codex, Gemini CLI, GitHub Copilot and Cursor
+# discover natively; Claude Code reaches it through the repository plugin manifest.
+SKILLS_REL = Path(".agents") / "skills"
+SKILLS_ROOT = ROOT / SKILLS_REL
 MANIFEST = SKILLS_ROOT / "manifest.json"
+PLUGIN_NAME = "knowledge-gateway"
+# Regular files that import AGENTS.md. A git symlink checks out as a text placeholder on
+# Windows without Developer Mode (or any core.symlinks=false checkout), so agents would get
+# no instructions; an import line works everywhere.
+INSTRUCTION_FILES = ("CLAUDE.md", "GEMINI.md")
+RETIRED_PATHS = (Path("skills"), Path(".claude") / "skills")
+# The plugin root is the repository root, and Claude Code auto-loads these default component
+# paths from a plugin root: adding one would ship it silently to every plugin user.
+PLUGIN_DEFAULT_COMPONENTS = ("commands", "agents", "hooks/hooks.json", ".mcp.json", ".lsp.json",
+                             "bin", "settings.json", "output-styles")
 NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 KNOWN_TOOLS = {
     "list_vaults", "list_notes", "read_note", "list_attachments", "read_attachment",
@@ -44,9 +58,202 @@ def parse_frontmatter(text: str) -> tuple[dict[str, str], str]:
     return data, "\n".join(lines[end + 1 :]).strip()
 
 
-def validate(root: Path = ROOT) -> list[str]:
+def git_index(root: Path) -> tuple[dict[str, bytes] | None, str | None]:
+    """Map each tracked path to its git mode, or (None, reason) when the index is unreadable.
+
+    The reason is None only for a plain "not a git repository" result outside any checkout
+    (an unpacked source archive or a test fixture), which is the one case with nothing to check.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "--stage", "-z"],
+            capture_output=True,
+            check=False,
+        )
+    except OSError as exc:
+        return None, f"git is not runnable: {exc}"
+    if result.returncode != 0:
+        message = result.stderr.decode("utf-8", "replace").strip() or f"exit {result.returncode}"
+        if "not a git repository" in message and not (root / ".git").exists():
+            return None, None
+        return None, message
+    entries: dict[str, bytes] = {}
+    for record in filter(None, result.stdout.split(b"\0")):
+        meta, _, path = record.partition(b"\t")
+        entries[path.decode("utf-8", "surrogateescape")] = meta.split(b" ", 1)[0]
+    return entries, None
+
+
+def tracked_symlinks(root: Path) -> list[str] | None:
+    """Paths git tracks as symlinks (mode 120000), or None when no git index is readable."""
+    entries, _ = git_index(root)
+    if entries is None:
+        return None
+    return [path for path, mode in entries.items() if mode == b"120000"]
+
+
+def validate_tracked_symlinks(root: Path, entries: dict[str, bytes] | None, reason: str | None) -> list[str]:
+    if entries is None:
+        if reason is None:  # an unpacked archive or a fixture outside any checkout
+            return []
+        if os.environ.get("CI"):
+            return [f"cannot read the git index to enforce the no-symlink rule: {reason}"]
+        print(f"warning: no-symlink check skipped, git index unreadable: {reason}", file=sys.stderr)
+        return []
+    return [f"{path}: git tracks a symlink; use a regular file so every OS checks it out"
+            for path, mode in entries.items() if mode == b"120000"]
+
+
+def validate_retired_paths(root: Path, entries: dict[str, bytes] | None) -> list[str]:
+    """Reject the pre-portable layout without flagging a developer's own untracked skills.
+
+    `.claude/skills/` is Claude Code's standard place for personal project skills, and branch
+    switches can leave untracked files under `skills/`; only tracked entries, symlinks and
+    checked-out placeholder files mean the old layout came back.
+    """
     errors: list[str] = []
-    skills_root = root / "skills"
+    for retired in RETIRED_PATHS:
+        rel = retired.as_posix()
+        path = root / retired
+        tracked = entries is not None and any(p == rel or p.startswith(rel + "/") for p in entries)
+        if tracked or path.is_symlink() or path.is_file():
+            errors.append(f"{rel} is retired; the canonical pack is {SKILLS_REL.as_posix()}")
+    return errors
+
+
+def validate_plugin_root(root: Path, entries: dict[str, bytes] | None) -> list[str]:
+    errors = []
+    for rel in PLUGIN_DEFAULT_COMPONENTS:
+        tracked = entries is not None and any(p == rel or p.startswith(rel + "/") for p in entries)
+        if tracked or (entries is None and (root / rel).exists()):
+            errors.append(f"{rel}: Claude Code would load it from the repository plugin root for every "
+                          "plugin user; move it or give the plugin its own root")
+    return errors
+
+
+def _inside(root: Path, rel: str) -> Path | None:
+    """Resolve a repository-relative reference, or None when it escapes the repository."""
+    if Path(rel).is_absolute() or "\\" in rel:
+        return None
+    target = (root / rel).resolve()
+    return target if target.is_relative_to(root.resolve()) else None
+
+
+def import_lines(text: str) -> list[str]:
+    """Targets of `@path` import lines outside fenced code blocks, which clients do not expand."""
+    targets: list[str] = []
+    fence: str | None = None
+    for line in text.splitlines():
+        stripped = line.strip()
+        marker = re.match(r"(`{3,}|~{3,})", stripped)
+        if marker:
+            if fence is None:
+                fence = marker.group(1)
+            elif marker.group(1)[0] == fence[0] and len(marker.group(1)) >= len(fence):
+                fence = None
+            continue
+        if fence is None and stripped.startswith("@"):
+            targets.append(stripped[1:].strip())
+    return targets
+
+
+def validate_instruction_files(root: Path) -> list[str]:
+    errors: list[str] = []
+    agents = root / "AGENTS.md"
+    if agents.is_symlink() or not agents.is_file():
+        return ["AGENTS.md must be a regular file"]
+    for name in INSTRUCTION_FILES:
+        path = root / name
+        if path.is_symlink() or not path.is_file():
+            errors.append(f"{name} must be a regular file that imports AGENTS.md")
+            continue
+        imports = import_lines(path.read_text(encoding="utf-8"))
+        if not any(_inside(root, ref) == agents.resolve() for ref in imports):
+            errors.append(f"{name} must contain an import line for AGENTS.md (e.g. @AGENTS.md)")
+    return errors
+
+
+def _project_version(root: Path) -> str | None:
+    try:
+        import tomllib  # stdlib from Python 3.11, the project's minimum; imported lazily so an
+    except ImportError:  # older system Python gets this message rather than an import traceback
+        sys.exit("validate-skills.py needs Python 3.11+ (tomllib) to read the pyproject version")
+    try:
+        return tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    except (OSError, KeyError, tomllib.TOMLDecodeError):
+        return None
+
+
+def _load_json(path: Path, label: str, errors: list[str]) -> dict | None:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        errors.append(f"missing {label}")
+        return None
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        errors.append(f"invalid {label} JSON: {exc}")
+        return None
+    if not isinstance(data, dict):
+        errors.append(f"{label} must be a JSON object")
+        return None
+    return data
+
+
+def validate_plugin(root: Path) -> list[str]:
+    """Claude Code scans only .claude/skills; the repository plugin serves it the canonical pack."""
+    errors: list[str] = []
+    plugin = _load_json(root / ".claude-plugin" / "plugin.json", ".claude-plugin/plugin.json", errors)
+    if plugin is not None:
+        name = plugin.get("name")
+        if name != PLUGIN_NAME:
+            errors.append(f"plugin.json name must be {PLUGIN_NAME!r}")
+        version = _project_version(root)
+        if version is None or plugin.get("version") != version:
+            errors.append(f"plugin.json version must equal pyproject version {version!r}")
+        skills = plugin.get("skills")
+        refs = [skills] if isinstance(skills, str) else skills
+        if not isinstance(refs, list) or not refs or any(not isinstance(ref, str) for ref in refs):
+            errors.append("plugin.json skills must name the canonical skill pack")
+        else:
+            for ref in refs:
+                target = _inside(root, ref)
+                if not ref.startswith("./"):  # Claude Code rejects plugin paths without it
+                    errors.append(f"plugin.json skills path {ref!r} must start with './'")
+                elif target is None:
+                    errors.append(f"plugin.json skills path {ref!r} escapes the repository")
+                elif not target.is_dir():
+                    errors.append(f"plugin.json skills path {ref!r} does not exist")
+                elif target != (root / SKILLS_REL).resolve():
+                    errors.append(f"plugin.json skills path {ref!r} must be ./{SKILLS_REL.as_posix()}/")
+    market = _load_json(root / ".claude-plugin" / "marketplace.json", ".claude-plugin/marketplace.json", errors)
+    if market is not None:
+        # The documented install command is knowledge-gateway@knowledge-gateway.
+        if market.get("name") != PLUGIN_NAME:
+            errors.append(f"marketplace.json name must be {PLUGIN_NAME!r}")
+        owner = market.get("owner")
+        if not isinstance(owner, dict) or not isinstance(owner.get("name"), str) or not owner["name"].strip():
+            errors.append("marketplace.json owner.name must be a non-empty string")
+        entries = market.get("plugins")
+        if not isinstance(entries, list) or not any(
+            isinstance(entry, dict) and entry.get("name") == PLUGIN_NAME and entry.get("source") == "./"
+            for entry in entries
+        ):
+            errors.append(f"marketplace.json must list plugin {PLUGIN_NAME!r} with source './'")
+    return errors
+
+
+def validate(root: Path = ROOT) -> list[str]:
+    entries, reason = git_index(root)
+    return (validate_tracked_symlinks(root, entries, reason) + validate_instruction_files(root)
+            + validate_plugin(root) + validate_plugin_root(root, entries)
+            + validate_retired_paths(root, entries) + validate_pack(root))
+
+
+def validate_pack(root: Path) -> list[str]:
+    errors: list[str] = []
+    skills_root = root / SKILLS_REL
+    if skills_root.is_symlink() or not skills_root.is_dir():
+        return [f"{SKILLS_REL.as_posix()} must be a real directory holding the canonical pack"]
     manifest_path = skills_root / "manifest.json"
     if not manifest_path.is_file():
         return [f"missing manifest: {manifest_path.relative_to(root)}"]
@@ -74,13 +281,15 @@ def validate(root: Path = ROOT) -> list[str]:
         if name in seen:
             errors.append(f"duplicate skill name: {name}")
         seen.add(name)
-        expected_rel = Path("skills") / name / "SKILL.md"
-        if rel != expected_rel.as_posix():
-            errors.append(f"{name}: path must be {expected_rel.as_posix()}")
-        path = root / expected_rel
+        # Relative to the pack, so the manifest holds in the repository (.agents/skills), in the
+        # sdist (skills/) and in consumer copies alike.
+        expected_rel = f"{name}/SKILL.md"
+        if rel != expected_rel:
+            errors.append(f"{name}: path must be {expected_rel} (relative to the pack)")
+        path = skills_root / expected_rel
         manifest_paths.add(path)
         if not path.is_file():
-            errors.append(f"{name}: missing {expected_rel.as_posix()}")
+            errors.append(f"{name}: missing {(SKILLS_REL / expected_rel).as_posix()}")
             continue
         try:
             fm, body = parse_frontmatter(path.read_text(encoding="utf-8"))
@@ -117,14 +326,7 @@ def validate(root: Path = ROOT) -> list[str]:
 
     discovered = set(skills_root.glob("*/SKILL.md"))
     for path in sorted(discovered - manifest_paths):
-        errors.append(f"unregistered skill: {path.relative_to(root)}")
-
-    for alias_path in (Path(".agents/skills"), Path(".claude/skills")):
-        alias = root / alias_path
-        if not alias.is_symlink():
-            errors.append(f"{alias_path} must be a symlink to the canonical skill pack")
-        elif os.readlink(alias) != "../skills":
-            errors.append(f"{alias_path} must point to ../skills")
+        errors.append(f"unregistered skill: {path.relative_to(root).as_posix()}")
     return errors
 
 

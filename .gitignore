@@ -7,6 +7,9 @@ htmlcov/
 dist/
 build/
 
+# Machine-specific Claude Code settings (local-scope plugin install writes an absolute path)
+.claude/settings.local.json
+
 # Live config - NEVER commit (paths + bearer tokens live only on the host)
 vaults.yaml
 tokens.yaml
