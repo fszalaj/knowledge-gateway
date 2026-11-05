@@ -16,7 +16,98 @@ Persistent installations update through their configured updater or an explicit 
   (`<name>/SKILL.md` instead of `skills/<name>/SKILL.md`), so they resolve in the repository,
   in the sdist and in copies alike.
 
+### Added
+- **The code graph reads infrastructure, CI and low-code repositories, not just code.** New
+  dedicated repo-level passes, all stdlib + PyYAML so they also run under `[graph-slim]`:
+  Azure Bicep (templates, `.bicepparam` files, modules, resources, Key Vault secret reads by
+  name, and the deployment scripts that run them), Docker and compose (stages, base images,
+  what is copied in and run, services, mounts, build and push scripts), Kubernetes and Helm
+  (charts, dependencies, values files and overlays, the releases `helm upgrade` scripts
+  install, plain manifests and kustomizations, and what resources reference), GitHub Actions
+  (workflows, jobs, actions, reusable workflows, secret and variable names, and the scripts
+  `run:` lines execute), Appsmith git-sync exports (pages, widgets, queries, datasources and
+  the bindings between them), and dependency manifests (pyproject, requirements, package.json,
+  .NET projects and solutions, Ansible Galaxy requirements). A pass that references a file
+  another pass owns uses that pass's id, so the graphs join.
+- The Ansible pass now finds playbooks anywhere in the tree, follows `import_playbook`, links
+  `template` / `copy` tasks to their source files, and reads INI and YAML inventories and
+  `group_vars` / `host_vars` (which group or host they configure, never their contents), so
+  `targets` edges show which hosts a play runs against.
+- Graph metadata gains `passes`: each dedicated pass that ran and how many nodes it emitted,
+  so `graph_stats` shows whether a pass found nothing or was never reached.
+- **CI, runtime and API passes.** Four more dedicated passes, also stdlib + PyYAML: Jenkins
+  pipelines (declarative and scripted stages and their order, credential ids, and what steps
+  run, build, push and deploy - Docker images, Helm releases, Elastic Beanstalk environments,
+  .NET projects), AWS Elastic Beanstalk bundles (`.ebextensions` option and resource names,
+  EB CLI and `aws-*-tools-defaults` targets, platform hooks, Procfile, Dockerrun), HTTP request
+  files (`*.http` / `*.rest`: each request's method, route shape, header and variable names, and
+  the files and requests it uses), and ASP.NET Core endpoints (attribute-routed controllers and
+  minimal APIs as `endpoint:<METHOD> <route shape>`, with the handler file and the project that
+  serves it). Their ids for files, projects, images, releases and environments are the owning
+  pass's, so a Jenkins stage, the project it deploys and the Beanstalk environment it targets
+  are one path.
+- **Post-merge links**, reported as `links` in the graph metadata and the `graph_build` reply:
+  joins that need every fragment run once after the merge. The first, `calls_api` (`INFERRED`,
+  with a `match` tier), links an Appsmith query or an HTTP request to the ASP.NET endpoint whose
+  method and route shape it matches. A link that raises is reported as `-1` and costs only its
+  edges.
+- Jenkins `dotnet test` steps link the stage to the project they test (`tests`), and an
+  environment a Jenkins deploy names hangs off its `beanstalkapp:` node even when no Beanstalk
+  file names it; both passes apply one set of application and environment name rules, so one
+  deployment has one id. ASP.NET endpoints carry `optional_segments`, and `calls_api` also
+  matches a client that leaves an optional trailing parameter out. When two passes emit the
+  same node, its `source_file` and `source_location` now always come from the same pass.
+- Appsmith query nodes carry `route_shape`, their path shape in the canonical form the HTTP and
+  ASP.NET passes use, so the three meet on one string. `path` is unchanged.
+- A Galaxy requirement `provides` (`INFERRED`) the role a playbook references by its name, or
+  `ns.coll.<role>` for a collection, so an installed role is typed instead of dangling.
+  `graph_build` replies with `passes` too.
+
+### Security
+- Every new pass copies names, never values: no environment or build-arg values, parameter
+  defaults or assignments, Kubernetes Secret data, datasource URLs, credentials, headers or
+  bodies, or inventory variables reach a graph. Each pass is tested with a planted value that
+  must not appear anywhere in its output. An Appsmith query keeps only the shape of its URL
+  path: a segment that is not a plain word becomes `{}`, so a token carried in the path never
+  reaches the graph.
+- The Jenkins, Elastic Beanstalk, HTTP and ASP.NET passes follow the same rule, each with its
+  own planted-value test: no Jenkins environment, parameter or option value, credential secret
+  or shell text; no `option_settings` value, command text or defaults-file value beyond the
+  application, environment, solution stack, project path and a plain region code; no request-file variable, header or body value, host,
+  userinfo or query string; no route constant, policy name or `appsettings` value. URL paths
+  keep only the shared shape (plain word segments or `v<n>`, everything else `{}`); the query
+  string and fragment are cut before any host logic, so nothing they hold (an embedded URL, a
+  `/`) can turn into a path segment, and a request-file base variable contributes only one `{}`
+  per segment of its path, never its text. A value-taking `helm` or `podman push` flag the
+  Jenkins, Kubernetes and Docker passes did not know (`--kube-tls-server-name`, `--keyring`,
+  `--tls-verify`, `--sign-passphrase-file`...) is no longer read as a release or image name.
+- Hostile runtime-pass input stays linear: every Jenkins bracket search and filesystem lookup is
+  charged to the file's work budget (lookups are also capped per file, as in the HTTP pass), a
+  Beanstalk option map repeated through YAML aliases is read once, and an ASP.NET `MapGroup`
+  prefix never grows past the route limit or nests past 32 groups - a chain of reassigned
+  groups used to take memory quadratic in its length.
+- A hostile or broken file costs that file, never the build or the server: the Ansible pass
+  parses YAML with the pure-Python loader (libyaml crashed the process on deep nesting),
+  recursive YAML aliases and deeply nested JSON are skipped, alias-amplified work and output are
+  capped per file, regexes that were quadratic on unclosed delimiters are linear scans, COPY
+  wildcards never follow directory links, and `build_graph` reports a pass that still raises
+  as `-1` in `passes` instead of failing.
+
 ### Changed
+- When two passes (or one) relate the same pair of nodes in two ways - a Docker stage that
+  copies a script and then runs it, a widget that runs a query and reads its data - the graph
+  keeps one edge, as before, but now lists every relation in its `relations` attribute instead
+  of silently keeping the last one. The primary `relation` is the first one written, unless a
+  later one is `EXTRACTED` and the first was only `INFERRED`.
+- `graph_neighbors` returns an edge's `relations` list when the pair carries more than one.
+- Ansible task ids in a playbook carry the play index and section
+  (`task:<rel>:<play>.<section>.<i>:<name>`): same-position, same-name tasks of different plays
+  or sections were one node. Task ids in a role's task files are unchanged.
+- `file:<rel>` nodes have one shape whichever pass writes them (label = basename, type `file`
+  or `directory`, file_type `file`), so merge order no longer changes a node's attributes.
+- The Ansible playbook rule is narrower: a root-level YAML list counts as a playbook only when
+  its plays carry `hosts` or `import_playbook`. Vault-tagged (`!vault`) values parse to nothing
+  instead of making the file unreadable.
 - **Agent instructions and skills no longer depend on git symlinks.** On Windows without
   Developer Mode, and in any `core.symlinks=false` checkout, the four tracked symlinks checked
   out as 9-byte text files, so agents got no instructions and no skills. `CLAUDE.md` is now a

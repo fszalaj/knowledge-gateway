@@ -1,18 +1,90 @@
 """Build a NetworkX multi-language code graph from a source tree and return node-link JSON.
 
-Passes: Ansible (PyYAML, repo-level) + Python (ast, per file) + optional broad
-languages (tree-sitter, per file). Communities (greedy modularity) are baked onto
-nodes. AST-only, read-only on the source tree. networkx is imported lazily so this
-module is importable without the [graph] extra.
+Passes: dedicated repo-level passes (Ansible, Microsoft Fabric, Appsmith, Bicep, Docker,
+GitHub Actions, Kubernetes/Helm, package manifests, Jenkins pipelines, AWS Elastic Beanstalk,
+HTTP request files, ASP.NET Core endpoints - stdlib + PyYAML, no tree-sitter) + Python (ast,
+per file) + optional broad languages (tree-sitter, per file), then post-merge links (INFERRED
+edges that need every fragment, e.g. an HTTP client calling an ASP.NET endpoint). Communities
+(greedy modularity) are baked onto nodes. AST-only, read-only on the source tree. networkx
+is imported lazily so this module is importable without the [graph] extra.
 """
 from __future__ import annotations
 
 import os
 from pathlib import Path
 
-from . import extract_ansible, extract_fabric, extract_python, resolve, treesitter
+from . import (extract_ansible, extract_appsmith, extract_aspnet, extract_beanstalk,
+               extract_bicep, extract_docker, extract_fabric, extract_ghactions, extract_http,
+               extract_jenkins, extract_k8s, extract_manifests, extract_python, resolve,
+               treesitter)
 
 SCHEMA_VERSION = 1
+
+# Dedicated repo-level passes, in the order their fragments are merged. The order is part of the
+# output: when two passes emit the same node id, later attributes win, so it is fixed here rather
+# than derived from anything on disk. The name is what `graph.passes` reports.
+REPO_PASSES = (
+    ("ansible", extract_ansible.extract),
+    ("fabric", extract_fabric.extract),
+    ("appsmith", extract_appsmith.extract),
+    ("bicep", extract_bicep.extract),
+    ("docker", extract_docker.extract),
+    ("ghactions", extract_ghactions.extract),
+    ("k8s", extract_k8s.extract),
+    ("manifests", extract_manifests.extract),
+    # CI and runtime passes. They write module:/file:/dockerfile:/project:/extimage:/helmrelease:
+    # ids in the owning pass's exact shape; beanstalk follows jenkins so the pass that reads the
+    # Beanstalk files themselves has the last word on a shared beanstalkenv: node.
+    ("jenkins", extract_jenkins.extract),
+    ("beanstalk", extract_beanstalk.extract),
+    ("http", extract_http.extract),
+    ("aspnet", extract_aspnet.extract),
+)
+
+# Post-merge links: joins that need every fragment at once (no single pass sees both ends).
+# Each takes every merged node as {"id", **attrs}, reads node attributes only and returns
+# INFERRED edges between nodes that already exist - never new nodes - in sorted order. They run
+# after the merge and before communities; the name is what `graph.links` reports. One failing
+# link costs its own edges (reported as -1), never the build, and no pass depends on another.
+POST_MERGE_LINKS = (
+    ("calls_api", extract_aspnet.link_calls),   # appsmithquery:/httprequest: -> endpoint:
+)
+
+
+def _merge_edge(G, e: dict) -> None:
+    """Add edge `e` to G, merging relation names when the pair already carries another one."""
+    u, v = e["source"], e["target"]
+    attrs = {k: val for k, val in e.items() if k not in ("source", "target")}
+    if G.has_edge(u, v) and G.edges[u, v].get("relation") != attrs.get("relation"):
+        # A DiGraph holds one edge per pair, and a stage that copies a script and then
+        # runs it, or a button that runs a query and reads its data, is two relations.
+        # Keep both names in `relations`; the primary stays the first one written
+        # unless only the newcomer was parsed rather than inferred.
+        cur = G.edges[u, v]
+        names = sorted(set(cur.get("relations") or [cur.get("relation")])
+                       | {attrs.get("relation")} - {None})
+        if cur.get("confidence") != "EXTRACTED" and attrs.get("confidence") == "EXTRACTED":
+            cur.clear()
+            cur.update(attrs)
+        cur["relations"] = names
+        return
+    G.add_edge(u, v, **attrs)
+
+
+def _merge_node(G, n: dict) -> None:
+    """Add node `n` to G; on an id another fragment already emitted, later attributes win -
+    except that `source_file` and `source_location` move as one unit, so a line number never
+    points into a file other than the one beside it."""
+    nid = n["id"]
+    if nid not in G:
+        G.add_node(nid, **{k: v for k, v in n.items() if k != "id"})
+        return
+    cur = G.nodes[nid]
+    new = {k: v for k, v in n.items() if v is not None and k != "id"}
+    if ("source_file" in new and new["source_file"] != cur.get("source_file")
+            and "source_location" not in new):
+        cur.pop("source_location", None)
+    cur.update(new)
 
 
 def _iter_files(root: Path, exclude: frozenset[str], include: frozenset[str]):
@@ -66,11 +138,23 @@ def build_graph(root, languages: list[str] | None = None,
             ts_files.append((p, rel))
     resolver = resolve.ImportResolver(root, [r for _, r in py_files] + [r for _, r in ts_files])
 
-    # Phase 2: extract (Ansible repo-level + Python ast + tree-sitter), resolving imports.
-    # Both are repo-level passes: the relationships they emit live between files, not
-    # inside them, so neither can be driven by the per-file loops below.
-    fragments: list[dict] = [extract_ansible.extract(root, excl, keep),
-                             extract_fabric.extract(root, excl, keep)]
+    # Phase 2: extract (repo-level passes + Python ast + tree-sitter), resolving imports.
+    # The repo-level passes come first: the relationships they emit live between files, not
+    # inside them, so none can be driven by the per-file loops below.
+    fragments: list[dict] = []
+    pass_nodes: dict[str, int] = {}
+    for name, extract in REPO_PASSES:
+        # Every pass skips a malformed file itself; this is the backstop for a shape none of
+        # them foresaw. One failing pass costs its own fragment (reported as -1 in `passes`),
+        # never the whole build.
+        try:
+            frag = extract(root, excl, keep)
+        except Exception:
+            pass_nodes[name] = -1
+            continue
+        fragments.append(frag)
+        # distinct ids the pass emitted itself; edge-only join targets are not counted
+        pass_nodes[name] = len({n["id"] for n in frag["nodes"]})
     n_py = n_ts = 0
     for p, rel in py_files:
         fragments.append(extract_python.extract(p, rel, resolver))
@@ -84,17 +168,29 @@ def build_graph(root, languages: list[str] | None = None,
     G = nx.DiGraph()
     for frag in fragments:
         for n in frag["nodes"]:
-            nid = n["id"]
-            if nid in G:
-                G.nodes[nid].update({k: v for k, v in n.items() if v is not None and k != "id"})
-            else:
-                G.add_node(nid, **{k: v for k, v in n.items() if k != "id"})
+            _merge_node(G, n)
         for e in frag["edges"]:
             for end in (e["source"], e["target"]):
                 if end not in G:
                     G.add_node(end)
-            G.add_edge(e["source"], e["target"],
-                       **{k: v for k, v in e.items() if k not in ("source", "target")})
+            _merge_edge(G, e)
+
+    # Phase 3: post-merge links over the whole graph. INFERRED only, both ends must already be
+    # nodes; a link whose hook raises is reported as -1 and contributes nothing.
+    link_edges: dict[str, int] = {}
+    merged = [{"id": nid, **attrs} for nid, attrs in sorted(G.nodes(data=True), key=lambda x: x[0])]
+    for name, link in POST_MERGE_LINKS:
+        try:
+            found = [{**e, "relation": name, "confidence": "INFERRED"} for e in link(merged)
+                     if e.get("source") in G and e.get("target") in G
+                     and e.get("source") != e.get("target")]
+        except Exception:
+            link_edges[name] = -1
+            continue
+        for e in found:
+            _merge_edge(G, e)
+        # distinct pairs that now carry this relation (as primary or in `relations`)
+        link_edges[name] = len({(e["source"], e["target"]) for e in found})
 
     communities: list = []
     if G.number_of_nodes():
@@ -112,6 +208,11 @@ def build_graph(root, languages: list[str] | None = None,
         "files_python": n_py,
         "files_treesitter": n_ts,
         "treesitter_available": treesitter.AVAILABLE,
+        # every dedicated pass that ran -> how many distinct nodes it emitted (0 = ran, found
+        # nothing; -1 = it raised, and its output was left out)
+        "passes": dict(pass_nodes),
+        # every post-merge link -> how many node pairs it joined (-1 = it raised, no edges)
+        "links": dict(link_edges),
         "communities": len(communities),
         "node_count": G.number_of_nodes(),
         "edge_count": G.number_of_edges(),
