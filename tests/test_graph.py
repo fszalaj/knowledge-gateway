@@ -98,6 +98,24 @@ def test_neighbors_is_deterministic_centre_first_and_dedupes_edges(tmp_path):
     assert [n["id"] for n in small["nodes"]] == [node] and small["truncated"] is True
 
 
+def test_neighbors_exposes_every_relation_of_a_merged_pair(tmp_path):
+    # A Docker stage that copies a script and then runs it is one DiGraph edge carrying both
+    # names; graph_neighbors is the only tool that returns edges, so it must show both.
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "run.sh").write_text("echo hi\n", encoding="utf-8")
+    (src / "Dockerfile").write_text("FROM alpine\nCOPY run.sh /run.sh\nCMD [\"/run.sh\"]\n",
+                                    encoding="utf-8")
+    gd = tmp_path / graphmod.GRAPH_DIRNAME
+    gd.mkdir()
+    (gd / "default.json").write_text(json.dumps(build_graph(src)), encoding="utf-8")
+    nb = graphmod.neighbors(tmp_path, "default", "module:run.sh", depth=1)
+    e = next(e for e in nb["edges"] if e["source"] == "dockerstage:Dockerfile#0")
+    assert e["relations"] == ["copies", "runs"] and e["relation"] in e["relations"]
+    single = [x for x in nb["edges"] if x is not e]
+    assert all("relations" not in x for x in single)     # a one-relation edge stays as it was
+
+
 def test_neighbors_reports_truncated_edges_too(tmp_path):
     # A dense neighbourhood can fit its nodes under the cap while its edges do not.
     import networkx as nx

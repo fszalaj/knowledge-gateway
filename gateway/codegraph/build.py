@@ -1,18 +1,35 @@
 """Build a NetworkX multi-language code graph from a source tree and return node-link JSON.
 
-Passes: Ansible (PyYAML, repo-level) + Python (ast, per file) + optional broad
-languages (tree-sitter, per file). Communities (greedy modularity) are baked onto
-nodes. AST-only, read-only on the source tree. networkx is imported lazily so this
-module is importable without the [graph] extra.
+Passes: dedicated repo-level passes (Ansible, Microsoft Fabric, Appsmith, Bicep, Docker,
+GitHub Actions, Kubernetes/Helm, package manifests - stdlib + PyYAML, no tree-sitter) +
+Python (ast, per file) + optional broad languages (tree-sitter, per file). Communities
+(greedy modularity) are baked onto nodes. AST-only, read-only on the source tree. networkx
+is imported lazily so this module is importable without the [graph] extra.
 """
 from __future__ import annotations
 
 import os
 from pathlib import Path
 
-from . import extract_ansible, extract_fabric, extract_python, resolve, treesitter
+from . import (extract_ansible, extract_appsmith, extract_bicep, extract_docker, extract_fabric,
+               extract_ghactions, extract_k8s, extract_manifests, extract_python, resolve,
+               treesitter)
 
 SCHEMA_VERSION = 1
+
+# Dedicated repo-level passes, in the order their fragments are merged. The order is part of the
+# output: when two passes emit the same node id, later attributes win, so it is fixed here rather
+# than derived from anything on disk. The name is what `graph.passes` reports.
+REPO_PASSES = (
+    ("ansible", extract_ansible.extract),
+    ("fabric", extract_fabric.extract),
+    ("appsmith", extract_appsmith.extract),
+    ("bicep", extract_bicep.extract),
+    ("docker", extract_docker.extract),
+    ("ghactions", extract_ghactions.extract),
+    ("k8s", extract_k8s.extract),
+    ("manifests", extract_manifests.extract),
+)
 
 
 def _iter_files(root: Path, exclude: frozenset[str], include: frozenset[str]):
@@ -66,11 +83,23 @@ def build_graph(root, languages: list[str] | None = None,
             ts_files.append((p, rel))
     resolver = resolve.ImportResolver(root, [r for _, r in py_files] + [r for _, r in ts_files])
 
-    # Phase 2: extract (Ansible repo-level + Python ast + tree-sitter), resolving imports.
-    # Both are repo-level passes: the relationships they emit live between files, not
-    # inside them, so neither can be driven by the per-file loops below.
-    fragments: list[dict] = [extract_ansible.extract(root, excl, keep),
-                             extract_fabric.extract(root, excl, keep)]
+    # Phase 2: extract (repo-level passes + Python ast + tree-sitter), resolving imports.
+    # The repo-level passes come first: the relationships they emit live between files, not
+    # inside them, so none can be driven by the per-file loops below.
+    fragments: list[dict] = []
+    pass_nodes: dict[str, int] = {}
+    for name, extract in REPO_PASSES:
+        # Every pass skips a malformed file itself; this is the backstop for a shape none of
+        # them foresaw. One failing pass costs its own fragment (reported as -1 in `passes`),
+        # never the whole build.
+        try:
+            frag = extract(root, excl, keep)
+        except Exception:
+            pass_nodes[name] = -1
+            continue
+        fragments.append(frag)
+        # distinct ids the pass emitted itself; edge-only join targets are not counted
+        pass_nodes[name] = len({n["id"] for n in frag["nodes"]})
     n_py = n_ts = 0
     for p, rel in py_files:
         fragments.append(extract_python.extract(p, rel, resolver))
@@ -90,11 +119,25 @@ def build_graph(root, languages: list[str] | None = None,
             else:
                 G.add_node(nid, **{k: v for k, v in n.items() if k != "id"})
         for e in frag["edges"]:
-            for end in (e["source"], e["target"]):
+            u, v = e["source"], e["target"]
+            for end in (u, v):
                 if end not in G:
                     G.add_node(end)
-            G.add_edge(e["source"], e["target"],
-                       **{k: v for k, v in e.items() if k not in ("source", "target")})
+            attrs = {k: val for k, val in e.items() if k not in ("source", "target")}
+            if G.has_edge(u, v) and G.edges[u, v].get("relation") != attrs.get("relation"):
+                # A DiGraph holds one edge per pair, and a stage that copies a script and then
+                # runs it, or a button that runs a query and reads its data, is two relations.
+                # Keep both names in `relations`; the primary stays the first one written
+                # unless only the newcomer was parsed rather than inferred.
+                cur = G.edges[u, v]
+                names = sorted(set(cur.get("relations") or [cur.get("relation")])
+                               | {attrs.get("relation")} - {None})
+                if cur.get("confidence") != "EXTRACTED" and attrs.get("confidence") == "EXTRACTED":
+                    cur.clear()
+                    cur.update(attrs)
+                cur["relations"] = names
+                continue
+            G.add_edge(u, v, **attrs)
 
     communities: list = []
     if G.number_of_nodes():
@@ -112,6 +155,9 @@ def build_graph(root, languages: list[str] | None = None,
         "files_python": n_py,
         "files_treesitter": n_ts,
         "treesitter_available": treesitter.AVAILABLE,
+        # every dedicated pass that ran -> how many distinct nodes it emitted (0 = ran, found
+        # nothing; -1 = it raised, and its output was left out)
+        "passes": dict(pass_nodes),
         "communities": len(communities),
         "node_count": G.number_of_nodes(),
         "edge_count": G.number_of_edges(),
