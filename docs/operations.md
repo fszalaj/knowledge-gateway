@@ -82,19 +82,7 @@ manual reinstall.
 
 ## Set it up with an AI
 
-Paste this into an agent at the root of a repository to wire in local mode:
-
-```
-Add the knowledge-gateway to this repo so agents can read and edit our vault over MCP with no
-tokens:
-1. Create or merge `.mcp.json` at the repo root with an mcpServers."wiki" entry that runs:
-   uvx --refresh --from 'knowledge-gateway[graph]' knowledge-gateway --local
-   (`--local` auto-detects the vault: ./wiki, a *-obsidian-vault dir, or a dir with .obsidian/.
-   If detection is ambiguous, use `--vault ./<vault dir>` instead of `--local`.)
-2. Verify: `uvx --refresh --from 'knowledge-gateway[graph]' knowledge-gateway --help` resolves;
-   then, in the agent, call list_vaults and read one note.
-Work on a branch and open a PR. No direct push, no AI attribution.
-```
-
-For a shared server, ask the gateway admin for a token and use the `claude mcp add` command from
-the README.
+The onboarding prompt is in the README under "Onboarding with an AI agent": the agent plans the
+setup with you (prerequisites, vault, MCP configuration, source clones under `repos/`, code graphs,
+verification) and changes nothing before you approve. For a shared server, ask the gateway admin
+for a token and use the `claude mcp add` command from the README.

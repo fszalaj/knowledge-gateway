@@ -13,3 +13,8 @@ build/
 # Live config - NEVER commit (paths + bearer tokens live only on the host)
 vaults.yaml
 tokens.yaml
+
+# Local clones of the repositories a vault describes or graphs (see repos/README.md).
+# Only the folder README is tracked; the clones are never committed.
+/repos/*
+!/repos/README.md

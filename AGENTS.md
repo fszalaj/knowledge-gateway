@@ -15,7 +15,7 @@ This repository is a security-sensitive Python/FastMCP service. Treat the vault 
 
 For substantive planning, implementation and review, use the installed personal `session-harness` skill at `~/.agents/skills/session-harness/SKILL.md` when it is present; this repository does not maintain a project copy. Honor its usage and context safeguards, prefer native same-family workers, and obtain independent reviews from the other two provider families when supported. Leaf assignments and trivial edits do not restart orchestration. Without the harness, this file and `docs/agent-skills.md` remain the complete contract.
 
-Durable context: `README.md` is the entry point, this file is the engineering contract, `CHANGELOG.md` records user-visible decisions, and the pull request carries the session handoff. The repository has no vault of its own; build its graph with `knowledge-gateway-graph . -o <vault>/.graph/knowledge-gateway.json` and query it through `code-graph-explore` and `code-impact`.
+Durable context: `README.md` is the entry point, this file is the engineering contract, `CHANGELOG.md` records user-visible decisions, and the pull request carries the session handoff. The repository has no vault of its own; build its graph with `knowledge-gateway-graph . -o <vault>/.graph/knowledge-gateway.json --exclude repos` (local clones under `repos/` are git-ignored and must not be graphed with the gateway itself) and query it through `code-graph-explore` and `code-impact`.
 
 ## Required engineering practices
 
