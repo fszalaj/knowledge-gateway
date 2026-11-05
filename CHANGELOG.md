@@ -16,6 +16,14 @@ Persistent installations update through their configured updater or an explicit 
   as a retired path.
 
 ### Documentation
+- The onboarding prompt now runs before anything is cloned: the agent asks where the vault should
+  go (a new repository based on a knowledge-gateway clone, or an existing one) and which
+  repositories to scan, then plans prerequisites, vault, MCP, source clones, wiki pages per
+  repository, code graphs, verification and the pull request.
+- Windows with Smart App Control: the README and the `gateway-setup` skill show how to run the
+  gateway on the signed python.org Python as `python -m gateway` (and the graph builder as
+  `python -m gateway.codegraph.cli`), because Smart App Control blocks uv's own Python builds and
+  the `knowledge-gateway.exe` launcher it generates.
 - The README has a diagram of shared server mode: token check, per-vault access list, path
   guards and attributed commits.
 - The README is shorter and written for someone deciding to use the gateway and setting it up.
