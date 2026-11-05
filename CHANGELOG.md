@@ -94,6 +94,9 @@ Persistent installations update through their configured updater or an explicit 
   as `-1` in `passes` instead of failing.
 
 ### Changed
+- A repository built on this tree can add its own skills to `.agents/skills/`: the test suite now
+  requires the bundled skills to be present instead of exactly that set, and added skills are
+  validated like the bundled ones (registered in `manifest.json`, documented tools, frontmatter).
 - When two passes (or one) relate the same pair of nodes in two ways - a Docker stage that
   copies a script and then runs it, a widget that runs a query and reads its data - the graph
   keeps one edge, as before, but now lists every relation in its `relations` attribute instead

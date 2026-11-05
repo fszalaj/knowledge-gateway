@@ -159,6 +159,11 @@ The canonical pack deliberately limits frontmatter to the portable common denomi
 
 ## Maintaining the package
 
+A repository that keeps this tree as its base (a team vault, a fork) may add its own skills to `.agents/skills/`
+next to the bundled ones, so every client discovers them the same way. Register each one in `manifest.json`; the
+validator holds added skills to the same rules as the bundled pack, and the test suite only requires the bundled
+skills to be present. Keep the added names distinct from the bundled ones so upstream merges stay conflict-free.
+
 When adding or changing a skill:
 
 1. Use a lowercase hyphenated directory name.
