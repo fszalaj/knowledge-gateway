@@ -92,8 +92,13 @@ _BUILD_VALUE_FLAGS = {
     "--arch", "--os", "--variant", "--userns", "--jobs", "--layers", "--sign-by", "--timestamp",
     "--build-context", "--cache-ttl", "--manifest", "--retry", "--retry-delay", "--logfile",
 }
+# `push` flags that may consume the next word (podman's included). Erring towards value-taking
+# costs at most a missed push edge; a missing one would make its value look like the image.
 _PUSH_VALUE_FLAGS = {"--platform", "--authfile", "--creds", "--cert-dir", "--format",
-                     "--digestfile", "--sign-by", "--retry", "--retry-delay"}
+                     "--digestfile", "--sign-by", "--retry", "--retry-delay", "--tls-verify",
+                     "--sign-passphrase-file", "--encryption-key", "--compression-format",
+                     "--compression-level", "--sign-by-sigstore", "--sign-by-sigstore-private-key",
+                     "--sign-by-sq-fingerprint", "--signature-policy", "--encrypt-layer"}
 _INTERPRETERS = {"sh", "bash", "zsh", "ash", "dash", "python", "python3", "pwsh", "powershell",
                  "node", "ruby", "perl", "source", ".", "exec", "uv", "poetry", "pipenv"}
 _IMAGE_REPO = re.compile(r"^[a-z0-9][a-z0-9._/:-]*[a-z0-9]$|^[a-z0-9]$")

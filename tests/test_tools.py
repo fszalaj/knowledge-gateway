@@ -222,6 +222,12 @@ async def test_graph_build_writes_provenance_that_graph_stats_reports(server, gi
         stats = await c.call_tool("graph_stats", {"vault": git_vault.name, "name": "kg"})
         listed = await c.call_tool("list_graphs", {"vault": git_vault.name})
     assert built.data["provenance"] == "kg.meta.yaml"
+    # the reply carries the per-pass node counts next to the totals; nothing in this tree is
+    # Ansible or a manifest, so every dedicated pass ran and found nothing
+    passes = built.data["passes"]
+    assert {"ansible", "manifests"} <= set(passes)
+    assert all(v == 0 for v in passes.values())
+    assert built.data["links"] == {"calls_api": 0}
     prov = stats.data["provenance"]
     assert prov["status"] == "ok" and prov["snapshot_matches"] is True
     assert prov["source_root"] == "tree" and prov["builder"].startswith("knowledge-gateway ")

@@ -11,7 +11,7 @@ Configure the gateway without replacing existing MCP servers or committing secre
 
 - Core vault only: no extra.
 - Code graph: `[graph]` for every supported language (`[graph-all]` is a kept alias).
-- Python and the dedicated passes (Ansible, Fabric, Bicep, Docker, Kubernetes/Helm, GitHub Actions, Appsmith, manifests) only, without the parser pack: `[graph-slim]`.
+- Python and the dedicated passes (Ansible, Fabric, Bicep, Docker, Kubernetes/Helm, GitHub Actions, Appsmith, manifests, Jenkins, Elastic Beanstalk, HTTP request files, ASP.NET Core) only, without the parser pack: `[graph-slim]`.
 - Document conversion: `[convert]`.
 - Complete skill pack: `[all]`.
 

@@ -320,6 +320,10 @@ def register_tools(mcp, vaults: dict[str, Vault], authors: dict | None = None, l
             return {"vault": vault, "graph": out.stem, "source": str(src),
                     "nodes": g.get("node_count"), "edges": g.get("edge_count"),
                     "communities": g.get("communities"), "treesitter": g.get("treesitter_available"),
+                    # dedicated pass -> nodes it emitted (0 ran and found nothing, -1 it raised)
+                    "passes": g.get("passes"),
+                    # post-merge link -> node pairs it joined (-1 it raised)
+                    "links": g.get("links"),
                     "provenance": manifest.path_for(out).name}
 
     @tool

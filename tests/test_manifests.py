@@ -260,6 +260,106 @@ roles:
     assert "manifest:tools/requirements.yaml" not in nodes     # some other tool's file
 
 
+def test_galaxy_provides_rule():
+    reqs = [("requirements.yml", {"collections": ["example.monitoring", {"name": "example.unused"}],
+                                  "roles": [{"name": "web_server", "src": "https://example.com/r.git"},
+                                            "example.database", "not_referenced"]}),
+            ("roles/requirements.yml", [{"src": "example.database"}, "example.legacy"]),
+            ("tools/requirements.yml", {"settings": {"flag": True}}),
+            ("broken/requirements.yml", None)]
+    roles = ["web_server", "example.database", "example.monitoring.exporter",
+             "example.monitoring.server", "example.monitoring", "example.monitoring.a.b",
+             "local_role", "example.legacy"]
+    got = [(pkg["id"], rn) for pkg, rn in extract_manifests.galaxy_provides(reqs, roles)]
+    assert got == [
+        ("extpackage:galaxy:example.monitoring", "example.monitoring.exporter"),
+        ("extpackage:galaxy:example.monitoring", "example.monitoring.server"),
+        ("extpackage:galaxy:web_server", "web_server"),
+        ("extpackage:galaxy:example.database", "example.database"),
+        ("extpackage:galaxy:example.legacy", "example.legacy"),
+    ]
+    pkg = extract_manifests.galaxy_provides(reqs, roles)[0][0]
+    assert pkg == extract_manifests.package_node("galaxy", "example.monitoring",
+                                                 "example.monitoring", "requirements.yml")
+    assert extract_manifests.galaxy_provides([], roles) == []
+    assert extract_manifests.galaxy_provides(reqs, []) == []
+
+
+def _galaxy_repo(root, secret=SECRET):
+    _mk(root, "requirements.yml", f"""---
+collections:
+  - name: example.monitoring
+    version: "{secret}/../x"
+  - name: https://u:{secret}@example.com/c/example.unused.git
+    type: git
+roles:
+  - name: web_server
+    src: https://u:{secret}@example.com/roles/web-server.git?token={secret}
+    version: v1.2
+""")
+    _mk(root, "site.yml", """- hosts: all
+  roles:
+    - web_server
+    - example.monitoring.exporter
+    - local_role
+    - unknown_role
+""")
+    _mk(root, "roles/local_role/tasks/main.yml", """- name: include
+  include_role:
+    name: example.monitoring.server
+""")
+
+
+def test_galaxy_requirement_provides_a_referenced_role(tmp_path):
+    from gateway.codegraph import extract_ansible
+    _galaxy_repo(tmp_path)
+    res = extract_ansible.extract(tmp_path)
+    nodes, edges = _index(res)
+    for pkg, role in (("web_server", "web_server"),
+                      ("example.monitoring", "example.monitoring.exporter"),
+                      ("example.monitoring", "example.monitoring.server")):
+        e = edges[(f"extpackage:galaxy:{pkg}", "provides", f"role:{role}")]
+        assert e["confidence"] == "INFERRED"
+        n = nodes[f"role:{role}"]
+        assert (n["type"], n["label"], n["file_type"], n["source_file"], n["origin"]) == \
+            ("role", role, "ansible", "requirements.yml", "galaxy")
+        assert nodes[f"extpackage:galaxy:{pkg}"]["type"] == "package"
+    # a role the repository defines keeps its own attrs; an unprovided one stays a placeholder
+    assert nodes["role:local_role"]["source_file"] == "roles/local_role"
+    assert "origin" not in nodes["role:local_role"]
+    assert "type" not in nodes["role:unknown_role"]
+    assert not any(e["relation"] == "provides" and e["target"] in ("role:local_role", "role:unknown_role")
+                   for e in res["edges"])
+    # the package node is the manifests pass's node, attribute for attribute
+    mnodes, _ = _index(extract_manifests.extract(tmp_path))
+    for pkg in ("web_server", "example.monitoring"):
+        assert nodes[f"extpackage:galaxy:{pkg}"] == mnodes[f"extpackage:galaxy:{pkg}"]
+    assert json.dumps(extract_ansible.extract(tmp_path)) == json.dumps(res)
+
+
+def test_galaxy_join_in_the_built_graph(tmp_path):
+    pytest.importorskip("networkx")
+    from gateway.codegraph import build_graph
+    _galaxy_repo(tmp_path)
+    data = build_graph(tmp_path)
+    nodes = {n["id"]: n for n in data["nodes"]}
+    links = {(e["source"], e.get("relation"), e["target"]) for e in data["links"]}
+    assert nodes["role:example.monitoring.exporter"]["type"] == "role"
+    assert ("extpackage:galaxy:example.monitoring", "provides", "role:example.monitoring.exporter") in links
+    assert ("manifest:requirements.yml", "depends_on", "extpackage:galaxy:example.monitoring") in links
+    assert nodes["extpackage:galaxy:example.monitoring"]["ecosystem"] == "galaxy"
+    assert data["graph"]["passes"]["ansible"] > 0 and data["graph"]["passes"]["manifests"] > 0
+
+
+def test_galaxy_join_carries_no_secret_values(tmp_path):
+    from gateway.codegraph import extract_ansible
+    canary = "Zq9-galaxy-canary-7Hk2"
+    _galaxy_repo(tmp_path, canary)
+    blob = json.dumps(extract_ansible.extract(tmp_path)) + json.dumps(extract_manifests.extract(tmp_path))
+    assert "provides" in blob
+    assert canary not in blob and "token=" not in blob and "example.com" not in blob
+
+
 def test_node_for_identity():
     nf = extract_manifests.node_for
     assert nf("a/B.csproj")["id"] == "project:a/B.csproj"
