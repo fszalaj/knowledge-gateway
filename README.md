@@ -171,23 +171,26 @@ distribution keeps shipping the pack under `skills/`.
 
 **Claude Code quickstart.** Claude Code discovers project-level skills only in `.claude/skills`,
 so it loads this pack from the plugin manifest once you opt in; skills then appear as
-`/knowledge-gateway:<skill>`. From the repository root, for one session:
+`/knowledge-gateway:<skill>`. From the repository root (recommended; the plugin is read in
+place, so skill edits apply immediately):
 
 ```bash
 claude --plugin-dir .
 ```
 
-Or install it persistently, once per clone:
+A persistent install is possible when you keep exactly one clone per OS user:
 
 ```bash
 claude plugin marketplace add ./ --scope local
 claude plugin install knowledge-gateway@knowledge-gateway --scope local
 ```
 
-The local scope writes this clone's absolute path only into the git-ignored
-`.claude/settings.local.json`. The plugin is read in place, so skill edits apply without a
-reinstall. Do not use `--scope project`: it rewrites the committed `.claude/settings.json` with an
-absolute path.
+The marketplace registration is per OS user, not per clone: running these commands in a second
+clone re-points the plugin of every clone at that second clone. The install records the clone's
+absolute path in `~/.claude/plugins/` and the git-ignored `.claude/settings.local.json`, and copies
+the whole working tree (untracked files included) into `~/.claude/plugins/cache/`, so do not keep
+secrets in the checkout when you install. Do not use `--scope project`: it rewrites the committed
+`.claude/settings.json` with an absolute path.
 
 Copy selected skills into the destination listed in the sourced compatibility table:
 

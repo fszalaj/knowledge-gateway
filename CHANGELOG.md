@@ -23,10 +23,12 @@ Persistent installations update through their configured updater or an explicit 
   regular file importing `@AGENTS.md`, and `GEMINI.md` imports `@./AGENTS.md`. The canonical skill
   pack is the real directory `.agents/skills/`, which Codex, Gemini CLI, GitHub Copilot and
   Cursor discover natively. The `.claude/skills` alias is gone: Claude Code loads the pack once
-  you opt in to the repository plugin in `.claude-plugin/` (`claude --plugin-dir .` for one
-  session, or `claude plugin marketplace add ./ --scope local` plus
-  `claude plugin install knowledge-gateway@knowledge-gateway --scope local`, which write only
-  the git-ignored `.claude/settings.local.json`); skills appear as `/knowledge-gateway:<skill>`.
+  you opt in to the repository plugin in `.claude-plugin/` (`claude --plugin-dir .` per
+  session, recommended; or, with exactly one clone per OS user, a persistent
+  `claude plugin marketplace add ./ --scope local` plus
+  `claude plugin install knowledge-gateway@knowledge-gateway --scope local`, which registers the
+  clone per OS user and copies its working tree into the plugin cache); skills appear as
+  `/knowledge-gateway:<skill>`.
   The validator and tests now reject any tracked symlink, retired-layout entries, import lines
   hidden in code fences, plugin manifests Claude Code would refuse, and plugin default
   components at the repository root, and require the plugin version to match the package.
