@@ -557,21 +557,34 @@ def test_malformed_input_never_raises(tmp_path):
 
 
 def test_hostile_input_costs_linear_time(tmp_path):
-    _mk(tmp_path, "a/Jenkinsfile", "node {\n" + "x = ( / ( / " * 40_000 + "\n}\n")
-    _mk(tmp_path, "b/Jenkinsfile", "node { sh \"" + "${" * 100_000 + "\" }\n")
-    _mk(tmp_path, "c/Jenkinsfile", "node {\n" + "sh(sh(sh(" * 20_000 + "\n}\n")
-    _mk(tmp_path, "d/Jenkinsfile", "node {\n" + "stage('s') {\n" * 3000 + "}\n" * 3000 + "}\n")
-    _mk(tmp_path, "e/Jenkinsfile", "node {\n sh '''" + "cd a && ./b.sh\n" * 20_000 + "''' }\n")
-    # unclosed calls whose argument lists are searched: load(, properties(parameters(, x.push(
-    _mk(tmp_path, "f/Jenkinsfile", "node {\n" + "load(" * 100_000 + "\n}\n")
-    _mk(tmp_path, "g/Jenkinsfile", "node {\n properties(" + "parameters(" * 100_000 + "\n}\n")
-    _mk(tmp_path, "h/Jenkinsfile", "node {\n x = docker.image('a/b')\n" + "x.push(" * 100_000 + "\n}\n")
-    _mk(tmp_path, "i/Jenkinsfile", "node {\n properties(" + "pipelineTriggers(" * 100_000 + "\n}\n")
-    t = time.monotonic()
-    nodes, _ = _index(extract_jenkins.extract(tmp_path))
-    assert time.monotonic() - t < 20
-    assert "jenkinspipeline:a/Jenkinsfile" in nodes
-    assert {f"jenkinspipeline:{d}/Jenkinsfile" for d in "fghi"} <= set(nodes)
+    # Each hostile shape at size n and 4n. Linear work grows ~4x, quadratic ~16x; a ratio is independent of the
+    # machine and of coverage tracing, which slows CI ~10x and made an absolute time limit flaky.
+    shapes = {
+        "a": lambda n: "node {\n" + "x = ( / ( / " * (n * 2) + "\n}\n",
+        "b": lambda n: "node { sh \"" + "${" * (n * 5) + "\" }\n",
+        "c": lambda n: "node {\n" + "sh(sh(sh(" * n + "\n}\n",
+        "d": lambda n: "node {\n" + "stage('s') {\n" * (n // 7) + "}\n" * (n // 7) + "}\n",
+        "e": lambda n: "node {\n sh '''" + "cd a && ./b.sh\n" * n + "''' }\n",
+        # unclosed calls whose argument lists are searched: load(, properties(parameters(, x.push(
+        "f": lambda n: "node {\n" + "load(" * (n * 5) + "\n}\n",
+        "g": lambda n: "node {\n properties(" + "parameters(" * (n * 5) + "\n}\n",
+        "h": lambda n: "node {\n x = docker.image('a/b')\n" + "x.push(" * (n * 5) + "\n}\n",
+        "i": lambda n: "node {\n properties(" + "pipelineTriggers(" * (n * 5) + "\n}\n",
+    }
+
+    def cost(name, n):
+        root = tmp_path / f"{name}-{n}"
+        _mk(root, f"{name}/Jenkinsfile", shapes[name](n))
+        t = time.perf_counter()
+        nodes, _ = _index(extract_jenkins.extract(root))
+        return time.perf_counter() - t, nodes
+
+    for name in shapes:
+        small, _ = cost(name, 1_000)
+        large, nodes = cost(name, 4_000)
+        assert large < 10 * max(small, 0.02), (name, small, large)
+        if name in "afghi":
+            assert f"jenkinspipeline:{name}/Jenkinsfile" in nodes
 
 
 def test_filesystem_lookups_are_capped_per_file(tmp_path):
