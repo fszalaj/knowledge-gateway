@@ -16,6 +16,7 @@ Persistent installations update through their configured updater or an explicit 
   `vault-roster` skill. The onboarding prompt asks whether the vault serves a team and uses them.
 
 ### Changed
+- CI tests Python 3.15. Installation guidance recommends Python 3.15; the package still requires Python 3.11 or newer.
 - The Claude Code plugin manifests (`.claude-plugin/plugin.json` and `marketplace.json`) are
   removed. Claude Code reads the skills the way `AGENTS.md` (imported by `CLAUDE.md`) instructs,
   from `.agents/skills/<name>/SKILL.md`, so there is no plugin to install or keep in step with

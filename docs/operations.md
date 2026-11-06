@@ -60,7 +60,7 @@ created or moved. Code merged without a version bump stays unreleased.
 1. Move the `Unreleased` changelog entries into a new version section, and bump the version in
    `pyproject.toml` and `server.json`.
 2. Run `uv lock` so the lockfile carries the new version, then the skill validator and the test
-   suite. Open a pull request and merge only after the Python 3.11-3.13 CI matrix is green.
+   suite. Open a pull request and merge only after the Python 3.15 CI test is green.
 3. Watch the `release` run. Check the source commit, the tag, and that the wheel and sdist
    digests match on PyPI and on the GitHub Release.
 
