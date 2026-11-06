@@ -7,6 +7,8 @@ Persistent installations update through their configured updater or an explicit 
 
 ## Unreleased
 
+## v0.14.0 - 2026-11-06
+
 ### Added
 - Team vault kit for vaults built from a clone of this repository: `repos.example.txt` and
   `team.example.txt` (templates for `repos.txt` and `team.txt`, with `# git-base:` and
