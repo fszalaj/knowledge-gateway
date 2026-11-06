@@ -7,6 +7,8 @@ Persistent installations update through their configured updater or an explicit 
 
 ## Unreleased
 
+## v0.14.1 - 2026-11-06
+
 ### Fixed
 - Prevent Git commands from reading the MCP input stream. Add an opt-in converter preload for Windows clients where
   native dependencies can stall when first loaded in a worker thread.
