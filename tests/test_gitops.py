@@ -1,5 +1,6 @@
 import os
 import subprocess
+import sys
 
 import pytest
 
@@ -48,6 +49,26 @@ def test_status_reflects_subdir(tmp_path):
     assert gitops.status(v)["dirty"] is False
     (tmp_path / "wiki" / "a.md").write_text("# A3\n")
     assert gitops.status(v)["dirty"] is True
+
+
+@pytest.mark.skipif(os.name == "nt", reason="uses a POSIX git stub")
+def test_git_does_not_read_open_server_stdin(tmp_path):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    stub = bin_dir / "git"
+    stub.write_text('#!/bin/sh\nread value || exit 0\nexit 1\n')
+    stub.chmod(0o755)
+    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+    code = "from gateway.gitops import _git; _git('.', 'status', timeout=3)"
+    proc = subprocess.Popen([sys.executable, "-c", code], stdin=subprocess.PIPE, env=env)
+    try:
+        assert proc.wait(timeout=6) == 0
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
+        if proc.stdin:
+            proc.stdin.close()
 
 
 def test_commit_nothing_to_do(tmp_path):

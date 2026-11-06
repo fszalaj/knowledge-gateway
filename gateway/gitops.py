@@ -11,6 +11,7 @@ def _git(repo_root, *args, env=None, timeout: int = 30) -> str:
     # begins with pathspec magic (e.g. ':') can never broaden or alter a scoped add/commit.
     proc = subprocess.Popen(
         ["git", "-C", str(repo_root), *args],
+        stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -38,6 +39,7 @@ def _git(repo_root, *args, env=None, timeout: int = 30) -> str:
 def _tracked(repo_root, path: str) -> bool:
     proc = subprocess.run(
         ["git", "-C", str(repo_root), "ls-files", "--error-unmatch", "--", path],
+        stdin=subprocess.DEVNULL,
         capture_output=True,
         env={**os.environ, "GIT_LITERAL_PATHSPECS": "1"},
     )

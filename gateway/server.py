@@ -86,7 +86,16 @@ def main() -> None:
     ap = argparse.ArgumentParser(prog="knowledge-gateway")
     ap.add_argument("--vault", help="serve THIS single vault locally over stdio (no auth)")
     ap.add_argument("--local", action="store_true", help="auto-detect the cwd's vault and serve it locally over stdio")
+    ap.add_argument("--preload-converter", action="store_true",
+                    help="load optional document conversion dependencies before starting the server")
     args, _ = ap.parse_known_args()
+
+    if args.preload_converter:
+        try:
+            import markitdown  # noqa: F401 - load native dependencies on the main thread
+        except ImportError:
+            print("knowledge-gateway: install the [convert] extra to preload document conversion", file=sys.stderr)
+            raise SystemExit(2) from None
 
     vault = args.vault or os.environ.get("KNOWLEDGE_GATEWAY_VAULT")
     _local_env = os.environ.get("KNOWLEDGE_GATEWAY_LOCAL", "").strip().lower()

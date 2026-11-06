@@ -7,10 +7,32 @@ client actually observes - a commit scoped to the vault subdir. Asserting that t
 object exists, as these tests used to, proves nothing about either.
 """
 import subprocess
+import sys
+import types
 
 from fastmcp import Client
 
 from gateway.server import build_local_server, repo_layout
+
+
+def test_converter_preload_is_opt_in(tmp_path, monkeypatch):
+    from gateway import server
+
+    events = []
+    class Stub:
+        def run(self, **kwargs):
+            events.append("markitdown" in sys.modules)
+
+    monkeypatch.delitem(sys.modules, "markitdown", raising=False)
+    monkeypatch.setattr(server, "build_local_server", lambda path: Stub())
+    monkeypatch.setattr(sys, "argv", ["gateway", "--vault", str(tmp_path)])
+    server.main()
+    assert events == [False]
+
+    monkeypatch.setitem(sys.modules, "markitdown", types.ModuleType("markitdown"))
+    monkeypatch.setattr(sys, "argv", ["gateway", "--vault", str(tmp_path), "--preload-converter"])
+    server.main()
+    assert events == [False, True]
 
 
 def _git(repo, *args):
