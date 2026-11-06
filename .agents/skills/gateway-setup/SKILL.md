@@ -38,10 +38,12 @@ If auto-detection is ambiguous, replace `--local` with `--vault ./<vault-directo
 
 On Windows with Smart App Control on, uv's own Python builds and its generated `knowledge-gateway.exe` launcher are
 blocked ("Smart App Control has blocked part of this app"). Install the Python Install Manager from python.org
-(`winget install --id Python.PythonInstallManager -e`), run `pymanager install`, and use
+(`winget install --id Python.PythonInstallManager -e`), run `pymanager install 3.14`, and use
 `"--python-preference", "system", "--refresh", "--from", "knowledge-gateway[all]", "python", "-m", "gateway", "--local"`
 as the arguments; build graphs with `python -m gateway.codegraph.cli` instead of `knowledge-gateway-graph`. Never
 suggest turning Smart App Control off.
+
+Use Python 3.14 for `[graph]` and `[all]` on Windows until their native dependencies provide Python 3.15 wheels.
 
 ## Procedure
 

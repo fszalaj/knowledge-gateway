@@ -84,8 +84,11 @@ Use `knowledge-gateway[all]` in the snippet if you also want conversion.
 **Windows with Smart App Control.** Smart App Control blocks the unsigned Python builds that uv
 downloads and the `knowledge-gateway.exe` launcher it generates ("Smart App Control has blocked part
 of this app"). Install the Python Install Manager from python.org (`winget install --id
-Python.PythonInstallManager -e`, signed by the Python Software Foundation), run `pymanager install`,
+Python.PythonInstallManager -e`, signed by the Python Software Foundation), run `pymanager install 3.14`,
 and start the server through it as a module:
+
+Python 3.15 is not yet supported by all optional dependencies on Windows; use Python 3.14 for
+`[graph]` and `[all]` until their dependencies provide compatible wheels.
 
 ```jsonc
 "args": ["--python-preference", "system", "--refresh", "--from", "knowledge-gateway[graph]",
@@ -116,8 +119,9 @@ Ask me first:
 
 The plan covers, in this order:
 1. Prerequisites for this OS: git, gh (signed in) if GitHub is involved, uv, ripgrep and Python
-   the latest stable Python 3 (the package requires Python 3.11 or newer). On Windows install the Python Install Manager
-   from python.org (`winget install --id Python.PythonInstallManager -e`), then run `pymanager install`.
+   Python 3.11 or newer. For `[graph]` or `[all]` on Windows, use Python 3.14 until compatible
+   wheels are available for Python 3.15. Install the Python Install Manager from python.org
+   (`winget install --id Python.PythonInstallManager -e`), then run `pymanager install 3.14`.
    Smart App Control blocks the unsigned Python builds and launchers uv would use, and must
    not be turned off. Give me the install commands (Windows: winget; macOS: brew; Linux or WSL:
    the package manager and the uv installer); install nothing without asking.
