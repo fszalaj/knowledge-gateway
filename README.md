@@ -84,7 +84,7 @@ Use `knowledge-gateway[all]` in the snippet if you also want conversion.
 **Windows with Smart App Control.** Smart App Control blocks the unsigned Python builds that uv
 downloads and the `knowledge-gateway.exe` launcher it generates ("Smart App Control has blocked part
 of this app"). Install the Python Install Manager from python.org (`winget install --id
-Python.PythonInstallManager -e`, signed by the Python Software Foundation), run `py install 3.15`,
+Python.PythonInstallManager -e`, signed by the Python Software Foundation), run `pymanager install`,
 and start the server through it as a module:
 
 ```jsonc
@@ -116,8 +116,8 @@ Ask me first:
 
 The plan covers, in this order:
 1. Prerequisites for this OS: git, gh (signed in) if GitHub is involved, uv, ripgrep and Python
-   3.15 (the package requires Python 3.11 or newer). On Windows install the Python Install Manager
-   from python.org (`winget install --id Python.PythonInstallManager -e`), then run `py install 3.15`.
+   the latest stable Python 3 (the package requires Python 3.11 or newer). On Windows install the Python Install Manager
+   from python.org (`winget install --id Python.PythonInstallManager -e`), then run `pymanager install`.
    Smart App Control blocks the unsigned Python builds and launchers uv would use, and must
    not be turned off. Give me the install commands (Windows: winget; macOS: brew; Linux or WSL:
    the package manager and the uv installer); install nothing without asking.
