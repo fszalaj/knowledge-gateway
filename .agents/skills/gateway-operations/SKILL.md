@@ -22,7 +22,7 @@ The bundled updater (`deploy/auto-update.sh`) compares the latest PyPI version w
 1. Start from current `main` on a release branch.
 2. Move the `Unreleased` changelog entries into the new version section and update the version in `pyproject.toml` and `server.json`.
 3. Run `uv lock --check`, the skill validator, the full test suite, and `uv build`. Inspect the built metadata and complete diff.
-4. Open a pull request and require green CI for Python 3.11, 3.12, and 3.13. Merge only the reviewed release commit.
+4. Open a pull request and require green CI for the latest stable Python 3 available to GitHub Actions. Merge only the reviewed release commit.
 5. Merge the reviewed version bump. `release.yml` releases from the green `ci` run on `main`: it builds, publishes to PyPI through OIDC Trusted Publishing, verifies the published artifacts against the source tree, then creates the `vX.Y.Z` GitHub release and tag using those same artifact bytes. No moving branch is involved.
 6. Watch the release run to completion, then verify the source commit, immutable tag, PyPI version and matching wheel/sdist digests on GitHub. A merge without a version bump leaves new code unreleased. A completed version is a no-op; an incomplete tagged version resumes from its tag. Conflicting published assets stop the workflow. If PyPI has a version without a tag, inspect the original run and source evidence before recovering its immutable tag and retrying.
 7. Verify one refreshed `uvx --refresh` client and each managed server health check.

@@ -18,18 +18,19 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        id: python
+        with:
+          python-version: '3.x'
+          check-latest: true
       # The committed lockfile must stay consistent with pyproject.
       - run: uv lock --check
       # search/backlinks/list_tags shell out to ripgrep; install it so those
       # tools and their tests actually run in CI (not silently skipped).
       - run: sudo apt-get update && sudo apt-get install -y ripgrep
-      - run: uv venv --python ${{ matrix.python-version }}
+      - run: uv venv --python '${{ steps.python.outputs.python-path }}'
       - run: uv pip install -e ".[dev]"
-      - run: uv run pytest -q --cov=gateway --cov-report=term-missing
+      - run: uv run --no-sync pytest -q --cov=gateway --cov-report=term-missing
